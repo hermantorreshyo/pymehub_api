@@ -1,0 +1,20 @@
+# Secretos y configuración generada (RNF-066)
+/config/config.php
+.env
+*.env
+
+# Datos y estado en tiempo de ejecución
+/storage/*
+!/storage/.htaccess
+!/storage/README.md
+
+# Copias y volcados
+*.sql.gz
+*.tar.gz
+*.bak
+
+# Sistema y editores
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

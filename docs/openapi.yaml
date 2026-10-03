@@ -1,0 +1,193 @@
+openapi: 3.1.0
+info:
+  title: Pyme Hub API
+  version: 0.1.0
+  description: |
+    Contrato entre pymehub_api y pymehub_web (DEC-13).
+    Autenticación por cookie de sesión HttpOnly. Toda petición que modifica datos
+    exige la cabecera X-CSRF-Token con el valor devuelto por /v1/auth/me o /v1/auth/login.
+    Errores: { "error": { "code": "PH-…", "message", "details", "correlation_id" } }.
+servers:
+  - url: https://api.pymehub.hermantorres.com
+components:
+  securitySchemes:
+    sesion:
+      type: apiKey
+      in: cookie
+      name: PHSESSID
+    csrf:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string, example: PH-AUTH-001 }
+            message: { type: string }
+            details: { type: object }
+            correlation_id: { type: string }
+    Me:
+      type: object
+      properties:
+        usuario:
+          type: object
+          properties:
+            id: { type: integer }
+            nombre: { type: string }
+            apellidos: { type: string }
+            email: { type: string }
+            perfil: { type: string, enum: [ADMIN, GERENTE, RRHH, EMPLEADO] }
+        interlocutor:
+          type: object
+          properties:
+            id: { type: integer }
+            tipo: { type: string, enum: [PLATAFORMA, EMPRESA, FORMADOR] }
+            nombre: { type: string }
+            estado: { type: string }
+        plan: { type: [string, "null"], enum: [ENTRADA, COMPLETO, null] }
+        features: { type: array, items: { type: string } }
+        csrf_token: { type: string }
+        sesion:
+          type: object
+          properties:
+            inactividad_max_seg: { type: integer }
+    Invitacion:
+      type: object
+      properties:
+        enlace: { type: string }
+        expira_en: { type: string, format: date-time }
+    EmpresaAlta:
+      type: object
+      required: [nombre, nif, plan, ciclo_cobro, gerente]
+      properties:
+        nombre: { type: string }
+        nombre_comercial: { type: string }
+        nif: { type: string }
+        sector: { type: string }
+        email_contacto: { type: string }
+        telefono_contacto: { type: string }
+        plan: { type: string, enum: [ENTRADA, COMPLETO] }
+        ciclo_cobro: { type: string, enum: [MENSUAL, ANUAL] }
+        limite_empleados: { type: integer, maximum: 250 }
+        fecha_contrato_encargado: { type: string, format: date }
+        estado: { type: string, enum: [PILOTO, ACTIVO] }
+        gerente:
+          type: object
+          required: [nombre, email]
+          properties:
+            nombre: { type: string }
+            apellidos: { type: string }
+            email: { type: string }
+paths:
+  /v1/health:
+    get:
+      summary: Estado de la API (RNF-061)
+      responses:
+        '200': { description: ok o degradado }
+        '503': { description: base de datos caída }
+  /v1/auth/login:
+    post:
+      summary: Iniciar sesión
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        '200': { description: Sesión iniciada, content: { application/json: { schema: { $ref: '#/components/schemas/Me' } } } }
+        '401': { description: PH-AUTH-001 }
+        '429': { description: PH-AUTH-004 }
+  /v1/auth/me:
+    get:
+      summary: Usuario, interlocutor, plan, funcionalidades y token CSRF
+      security: [{ sesion: [] }]
+      responses:
+        '200': { description: ok, content: { application/json: { schema: { $ref: '#/components/schemas/Me' } } } }
+        '401': { description: PH-AUTH-002 }
+  /v1/auth/logout:
+    post:
+      summary: Cerrar sesión
+      security: [{ sesion: [], csrf: [] }]
+      responses:
+        '204': { description: Sesión cerrada }
+  /v1/auth/invitations/accept:
+    post:
+      summary: Activar la cuenta con el token de invitación
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password, acepta_privacidad]
+              properties:
+                token: { type: string }
+                password: { type: string, minLength: 10 }
+                acepta_privacidad: { type: boolean }
+      responses:
+        '200': { description: Cuenta activada }
+        '410': { description: PH-AUTH-005 }
+  /v1/admin/tenants:
+    get:
+      summary: Empresas cliente (perfil ADMIN)
+      security: [{ sesion: [] }]
+      responses: { '200': { description: ok } }
+    post:
+      summary: Alta de empresa con suscripción y gerente invitado (perfil ADMIN)
+      security: [{ sesion: [], csrf: [] }]
+      requestBody:
+        content: { application/json: { schema: { $ref: '#/components/schemas/EmpresaAlta' } } }
+      responses:
+        '201': { description: Creada; incluye invitacion_gerente }
+        '409': { description: NIF o email duplicado }
+        '422': { description: PH-VAL-001 }
+  /v1/admin/tenants/{id}:
+    get:
+      summary: Detalle de empresa con sus usuarios de gestión (perfil ADMIN)
+      security: [{ sesion: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses: { '200': { description: ok }, '404': { description: PH-TENANT-001 } }
+    patch:
+      summary: Datos, estado, plan, ciclo de cobro, límites (perfil ADMIN)
+      description: Un cambio de plan o de ciclo cierra la suscripción vigente y abre otra.
+      security: [{ sesion: [], csrf: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses: { '200': { description: ok } }
+  /v1/admin/metrics:
+    get:
+      summary: Empresas por estado y MRR teórico por plan (perfil ADMIN)
+      security: [{ sesion: [] }]
+      responses: { '200': { description: ok } }
+  /v1/users:
+    get:
+      summary: Cuentas de gestión de la empresa (perfil GERENTE)
+      security: [{ sesion: [] }]
+      responses: { '200': { description: ok } }
+    post:
+      summary: Crear cuenta de RR. HH. e invitar (perfil GERENTE)
+      security: [{ sesion: [], csrf: [] }]
+      responses: { '201': { description: Creada; incluye invitacion } }
+  /v1/users/{id}:
+    patch:
+      summary: Editar, bloquear o reactivar una cuenta de RR. HH. (perfil GERENTE)
+      security: [{ sesion: [], csrf: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses: { '200': { description: ok }, '404': { description: PH-TENANT-001 } }
+    delete:
+      summary: Baja de la cuenta de RR. HH. (perfil GERENTE)
+      security: [{ sesion: [], csrf: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses: { '204': { description: Baja realizada } }
+  /v1/users/{id}/invitation:
+    post:
+      summary: Generar un nuevo enlace de invitación (perfil GERENTE)
+      security: [{ sesion: [], csrf: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses: { '201': { description: ok, content: { application/json: { schema: { $ref: '#/components/schemas/Invitacion' } } } } }

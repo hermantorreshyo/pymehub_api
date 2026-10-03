@@ -1,0 +1,9 @@
+# Pyme Hub API: todo pasa por index.php
+Options -Indexes -MultiViews
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^ index.php [QSA,L]
+
+<IfModule mod_headers.c>
+    Header always unset X-Powered-By
+</IfModule>
