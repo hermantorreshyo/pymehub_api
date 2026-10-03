@@ -2,7 +2,7 @@
 
 **Proyecto:** Pyme Hub — TFM EUDE Business School (The Best Team)
 **Documento:** Especificación de requerimientos técnicos del Producto Mínimo Viable (MVP)
-**Versión:** 0.7 · 03/10/2026
+**Versión:** 0.8 · 03/10/2026
 **Stack:** LAMP nativo, sin Docker (Linux · Apache · **MySQL 8.4 LTS** · PHP 8.4)
 **Repositorios:** dos, independientes: `pymehub_api` (backend tipo API) y `pymehub_web` (frontend que consume la API)
 **Estado:** Alineado con la versión 4 del documento del TFM (carpeta *Revisión 004*). Los cambios que este documento obliga a trasladar al TFM se listan en §22.3.
@@ -18,6 +18,7 @@
 | 0.5 | 03/10/2026 | Alineación con las versiones 3 y 4 del TFM: cinco módulos (tres en el MVP, dos en fase 2) y modelo SaaS sin servicios de selección (§1); cuarto rol **RR. HH.** (§6.1); ciclo de cobro mensual o anual y línea base de impacto (§7, §9); análisis del AI Act con revisión de sesgos y contrato de encargado del tratamiento (§15); nivel de servicio, monitorización, mantenimiento y baja de la empresa cliente según el apartado 9.8 del TFM (§17.4); demo y criterios de aceptación con las pantallas del Anexo D (§18, §20); plan de construcción separado del cronograma del proyecto (Anexo F) (§21); tabla de alineación con el TFM (§22.3) |
 | 0.6 | 03/10/2026 | **Base de datos MySQL 8.4 LTS** en lugar de MariaDB (`DEC-05`, §3.5); **backend API y frontend en repositorios separados** con contrato OpenAPI versionado (`DEC-03`, `DEC-13`, §4); frontend sin código de servidor que solo consume la API (`RNF-007`); §13 reescrito con el Manual de Imagen Corporativa v1.0, el Manual de Maquetación HTML/CSS v1.0 y los mockups aprobados, incluidas las diferencias entre los mockups y el alcance del MVP (§13.6) |
 | 0.7 | 03/10/2026 | **Modelo de datos interlocutor/usuario** (§7, `DEC-14`): todos los actores en `interlocutor` (atributo `tipo`) y las personas en `usuario` (atributo `perfil`), con un interlocutor que tiene varios usuarios; tablas en español. Repositorios renombrados a `pymehub_api` y `pymehub_web` (GitHub). Aclaración de `RF-096`: en MySQL el DDL no es transaccional |
+| 0.8 | 03/10/2026 | Fase 3 (Organización): `RF-020` importación CSV de la plantilla y `RF-021` a `RF-023` (empleados, baja laboral e invitación de empleados) en §8.3; `LEG-016` referido a la columna real `interlocutor.fecha_contrato_encargado` |
 
 ---
 
@@ -396,6 +397,18 @@ Roles: **A** admin · **G** gerente · **H** RR. HH. · **E** empleado. Plan: **
 | POST | `/v1/employees/{id}/invitation` | G H |
 | POST | `/v1/employees/import` (CSV) | G H |
 | GET/POST | `/v1/employees/{id}/incidents` | G H |
+
+- `RF-020` (M) **Importación CSV de la plantilla** (`POST /v1/employees/import`, cuerpo `text/csv`):
+  - Archivo UTF-8 (con o sin BOM), separador `;` (Excel en español) o `,`, primera fila de cabecera. Máximo 1 MB y 250 filas de datos; las filas vacías se ignoran.
+  - Columnas: `codigo_interno`, `nombre`, `apellidos`, `email`, `puesto`, `tipo_contrato`, `turno`, `fecha_alta` (`AAAA-MM-DD` o `DD/MM/AAAA`) y `equipo` (nombre). Obligatorias: `codigo_interno`, `nombre`, `puesto`, `tipo_contrato`, `turno` y `fecha_alta`. Los enumerados admiten minúsculas, tildes y espacios (`Mozo almacén` = `MOZO_ALMACEN`). Plantilla de ejemplo: `docs/ejemplos/plantilla_empleados.csv`.
+  - **Todo o nada:** si una fila falla no se importa ninguna, y la respuesta `PH-VAL-002` lista cada error con `fila` (numeración de Excel: la cabecera es la 1), `columna` y `motivo`.
+  - Si `codigo_interno` ya existe en la empresa se actualiza la ficha (las columnas opcionales vacías no borran datos); si no, se crea el empleado. No se modifican por CSV empleados dados de baja ni el email de una cuenta activa.
+  - Los equipos deben existir: un equipo desconocido es un error, no se crea solo.
+  - `?simular=1` valida y devuelve el resumen (`altas`, `cambios`, `sin_cambios`, `errores`) sin escribir nada.
+  - Las altas comprueban `limite_empleados` (`PH-TENANT-002`), también al simular. La importación no crea invitaciones: se invita después, empleado a empleado.
+- `RF-021` (M) Un empleado es un `usuario` con perfil `EMPLEADO` y su `ficha_laboral` (`RF-122`). Se crea en `SIN_ACCESO` y el email es opcional hasta invitarle. Cada alta comprueba `limite_empleados` de la suscripción vigente (`PH-TENANT-002`); cuentan los empleados sin `fecha_baja`.
+- `RF-022` (M) `DELETE /v1/employees/{id}` registra la **baja laboral** con `fecha_baja` (no futura) y `motivo_baja` (`VOLUNTARIA`, `NO_VOLUNTARIA`, `FIN_CONTRATO`): no borra al usuario, le retira el acceso y anula sus invitaciones pendientes. La ficha queda en solo lectura. La supresión de datos es otro endpoint (`POST /v1/employees/{id}/erase`, §8.8).
+- `RF-023` (M) `POST /v1/employees/{id}/invitation` exige el contrato de encargado del tratamiento de la empresa (`LEG-016`, `PH-TENANT-003`) y un email, que puede indicarse en la propia petición. Un equipo solo se borra si no tiene empleados de alta.
 
 ### 8.4 IA para RRHH (plan Completo)
 
@@ -802,7 +815,7 @@ Coincidencia visual general con el mockup; funciona en escritorio, tableta y mó
 | `LEG-012` | M | Solo se registran ausencias **injustificadas**; las bajas médicas y sus causas no se registran ni puntúan (serían datos de salud) |
 | `LEG-013` | M | La participación en el check-in no interviene en ningún cálculo sobre la persona (`RF-056`) |
 | `LEG-015` | M | **Revisión de sesgos**: `cli/bias_report.php` genera cada trimestre la distribución de niveles de riesgo por equipo, puesto, turno y tipo de contrato, y señala diferencias superiores a 20 puntos porcentuales para revisión humana. El resultado se anota en la hoja técnica del modelo |
-| `LEG-016` | S | **Contrato de encargado del tratamiento**: no se pueden invitar empleados de una empresa sin `dpa_signed_at` registrado (`PH-TENANT-003`). Los proveedores que tratan datos personales (Hostinger) constan como subencargados; Mistral no recibe datos personales (`LEG-010`) |
+| `LEG-016` | S | **Contrato de encargado del tratamiento**: no se pueden invitar empleados de una empresa sin `interlocutor.fecha_contrato_encargado` registrada (`PH-TENANT-003`). Los proveedores que tratan datos personales (Hostinger) constan como subencargados; Mistral no recibe datos personales (`LEG-010`) |
 | `LEG-017` | M | **Baja de la empresa cliente** (TFM, apartado 9.8): exportación completa de sus datos (`RF-110`) y borrado definitivo a los 30 días de la baja, salvo otro plazo pactado en el contrato |
 | `LEG-014` | M | Las preferencias formativas y el comentario libre del empleado solo los ve él; puede editarlos o borrarlos, y se incluyen en su exportación de datos (`LEG-007`) |
 

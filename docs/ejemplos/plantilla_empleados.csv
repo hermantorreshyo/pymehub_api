@@ -1,0 +1,8 @@
+﻿codigo_interno;nombre;apellidos;email;puesto;tipo_contrato;turno;fecha_alta;equipo
+EMP-001;Lucía;Martín Gómez;lucia.martin@empresa-ejemplo.es;CONDUCTOR;INDEFINIDO;MANANA;2021-03-15;Norte
+EMP-002;Javier;Ruiz Sánchez;;REPARTIDOR;TEMPORAL;TARDE;01/09/2024;Norte
+EMP-003;Marta;López Fernández;marta.lopez@empresa-ejemplo.es;MOZO_ALMACEN;INDEFINIDO;NOCHE;2019-11-04;Almacén Central
+EMP-004;Daniel;García Pérez;;MOZO_ALMACEN;ETT;ROTATIVO;10/02/2025;Almacén Central
+EMP-005;Sara;Navarro Díaz;sara.navarro@empresa-ejemplo.es;COORDINADOR;INDEFINIDO;MANANA;2018-06-01;Sur
+EMP-006;Pablo;Jiménez Ortega;;CONDUCTOR;TEMPORAL;ROTATIVO;2025-07-21;Sur
+EMP-007;Elena;Moreno Castillo;elena.moreno@empresa-ejemplo.es;ADMINISTRATIVO;INDEFINIDO;MANANA;03/01/2022;

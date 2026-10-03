@@ -1,7 +1,7 @@
 # Modelo de datos · Pyme Hub
 
 **Motor:** MySQL 8.4 LTS · InnoDB · `utf8mb4_0900_ai_ci` · fechas en UTC
-**Migración de referencia:** `migrations/0001_esquema_inicial.sql`
+**Migraciones de referencia:** `migrations/0001_esquema_inicial.sql` y `migrations/0002_equipo_nombre_vigente.sql`
 
 ## 1. Principio: interlocutor y usuario
 
@@ -24,7 +24,7 @@ Ejemplo: la empresa «Reparto Rápido Castilla S.L.» es un interlocutor `EMPRES
 
    Así, un usuario `ADMIN` en una `EMPRESA` o un `EMPLEADO` en la `PLATAFORMA` son imposibles a nivel de base de datos, y cambiar el tipo de un interlocutor que ya tiene usuarios también.
 3. **Una sola plataforma.** Una columna generada (`plataforma_unica`) con índice único impide un segundo interlocutor `PLATAFORMA`.
-4. **Una sola suscripción vigente por empresa**, con el mismo mecanismo (`vigente_unica`).
+4. **Una sola suscripción vigente por empresa**, con el mismo mecanismo (`vigente_unica`). También el **nombre de equipo** es único solo entre los equipos vigentes (`nombre_vigente`, migración 0002), para poder reutilizar el nombre de un equipo borrado.
 5. **Aislamiento entre empresas.** Las tablas de negocio llevan `interlocutor_id` y sus claves foráneas son compuestas (`usuario_id, interlocutor_id`): es imposible, por ejemplo, registrar un check-in de un empleado con el `interlocutor_id` de otra empresa.
 6. **Una cuenta activa siempre tiene credenciales**: `CHECK (estado_acceso <> 'ACTIVO' OR (email IS NOT NULL AND password_hash IS NOT NULL))`.
 
@@ -38,7 +38,7 @@ Un empleado puede existir antes de tener acceso (por ejemplo, tras importar la p
 | `INVITADO` | Tiene una invitación pendiente |
 | `ACTIVO` | Puede iniciar sesión |
 | `BLOQUEADO` | Acceso suspendido por la empresa |
-| `BAJA` | Dado de baja (borrado lógico) |
+| `BAJA` | Sin acceso por baja. En un empleado, la baja laboral se registra en `ficha_laboral` (`fecha_baja` y `motivo_baja`: `VOLUNTARIA`, `NO_VOLUNTARIA`, `FIN_CONTRATO`) y el usuario se conserva para medir la rotación |
 
 ## 2. Diagrama
 
@@ -111,7 +111,7 @@ erDiagram
 | `suscripcion` | Plan y ciclo de cobro de una empresa | Histórico; una vigente |
 | `usuario` | Personas con perfil | Email único global; contraseña Argon2id |
 | `invitacion` | Enlaces de un solo uso | Solo se guarda el hash SHA-256; 72 h |
-| `equipo` | Equipos de la empresa | |
+| `equipo` | Equipos de la empresa | Nombre único entre los vigentes; no se borra si tiene empleados de alta |
 | `ficha_laboral` | Datos laborales del empleado | `motivo_baja` permite medir la rotación voluntaria |
 | `incidencia` | Ausencias injustificadas, retrasos, siniestros, quejas, reconocimientos | Sin bajas médicas (LEG-012) |
 | `modulo_formativo` | Micro-módulos | El propietario es un interlocutor: plataforma = catálogo global |

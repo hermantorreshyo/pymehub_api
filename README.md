@@ -41,4 +41,4 @@ tests/smoke_test.sh http://127.0.0.1:8080 http://127.0.0.1:5500 admin@local.test
 
 ## Estado
 
-Versión **0.1.0**: núcleo, seguridad, instalación, empresas, cuentas de gestión e invitaciones. El plan de construcción completo está en el documento de requisitos técnicos del MVP (§21).
+Versión **0.2.0**: núcleo, seguridad, instalación, empresas, cuentas de gestión e invitaciones (fases 1 y 2) y organización: equipos, empleados, importación CSV e incidencias (fase 3). El plan de construcción completo está en el documento de requisitos técnicos del MVP (§21).

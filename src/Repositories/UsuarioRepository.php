@@ -32,6 +32,30 @@ final class UsuarioRepository
         return Db::value('SELECT 1 FROM usuario WHERE email = ?', [$email]) !== null;
     }
 
+    /** ID del usuario (de cualquier interlocutor) que ya usa ese email; el email es único global. */
+    public static function emailOwner(string $email): ?int
+    {
+        $id = Db::value('SELECT id FROM usuario WHERE email = ?', [$email]);
+        return $id === null ? null : (int) $id;
+    }
+
+    /** @param string[] $emails @return array<string, int> email => ID del usuario que ya lo usa */
+    public static function emailOwners(array $emails): array
+    {
+        if ($emails === []) {
+            return [];
+        }
+        $rows = Db::all(
+            'SELECT id, email FROM usuario WHERE email IN (' . implode(',', array_fill(0, count($emails), '?')) . ')',
+            array_values($emails)
+        );
+        $map = [];
+        foreach ($rows as $r) {
+            $map[mb_strtolower((string) $r['email'])] = (int) $r['id'];
+        }
+        return $map;
+    }
+
     public static function create(int $interlocutorId, string $tipoInterlocutor, string $perfil, string $nombre, string $apellidos, ?string $email, string $estado = 'SIN_ACCESO', ?string $passwordHash = null): int
     {
         return Db::insert(

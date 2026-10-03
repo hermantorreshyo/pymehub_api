@@ -1,12 +1,13 @@
 openapi: 3.1.0
 info:
   title: Pyme Hub API
-  version: 0.1.0
+  version: 0.2.0
   description: |
     Contrato entre pymehub_api y pymehub_web (DEC-13).
     Autenticación por cookie de sesión HttpOnly. Toda petición que modifica datos
     exige la cabecera X-CSRF-Token con el valor devuelto por /v1/auth/me o /v1/auth/login.
     Errores: { "error": { "code": "PH-…", "message", "details", "correlation_id" } }.
+    Listados paginados: ?page=&per_page= (máx. 100); meta = { total, page, per_page }.
 servers:
   - url: https://api.pymehub.hermantorres.com
 components:
@@ -82,6 +83,108 @@ components:
             nombre: { type: string }
             apellidos: { type: string }
             email: { type: string }
+    Paginacion:
+      type: object
+      properties:
+        total: { type: integer }
+        page: { type: integer }
+        per_page: { type: integer }
+    Equipo:
+      type: object
+      properties:
+        id: { type: integer }
+        nombre: { type: string }
+        zona: { type: [string, "null"] }
+        responsable:
+          type: [object, "null"]
+          properties:
+            id: { type: integer }
+            nombre: { type: string }
+            apellidos: { type: string }
+        empleados: { type: integer, description: Empleados de alta en el equipo }
+        creado_en: { type: string }
+    EquipoEntrada:
+      type: object
+      properties:
+        nombre: { type: string, minLength: 2, maxLength: 80, description: Obligatorio al crear; único entre los equipos vigentes }
+        zona: { type: [string, "null"], maxLength: 80 }
+        responsable_usuario_id: { type: [integer, "null"], description: Usuario de la misma empresa }
+    Puesto: { type: string, enum: [CONDUCTOR, REPARTIDOR, MOZO_ALMACEN, COORDINADOR, ADMINISTRATIVO, OTRO] }
+    TipoContrato: { type: string, enum: [INDEFINIDO, TEMPORAL, ETT] }
+    Turno: { type: string, enum: [MANANA, TARDE, NOCHE, ROTATIVO] }
+    Empleado:
+      type: object
+      properties:
+        id: { type: integer }
+        nombre: { type: string }
+        apellidos: { type: string }
+        email: { type: [string, "null"] }
+        estado_acceso: { type: string, enum: [SIN_ACCESO, INVITADO, ACTIVO, BLOQUEADO, BAJA] }
+        codigo_interno: { type: [string, "null"] }
+        puesto: { $ref: '#/components/schemas/Puesto' }
+        tipo_contrato: { $ref: '#/components/schemas/TipoContrato' }
+        turno: { $ref: '#/components/schemas/Turno' }
+        fecha_alta: { type: string, format: date }
+        fecha_baja: { type: [string, "null"], format: date }
+        motivo_baja: { type: [string, "null"], enum: [VOLUNTARIA, NO_VOLUNTARIA, FIN_CONTRATO, null] }
+        equipo:
+          type: [object, "null"]
+          properties:
+            id: { type: integer }
+            nombre: { type: string }
+        ultimo_acceso_en: { type: [string, "null"] }
+        creado_en: { type: string }
+    EmpleadoEntrada:
+      type: object
+      description: |
+        En el alta son obligatorios nombre, puesto, tipo_contrato, turno y fecha_alta.
+        En PATCH todos son opcionales; los obligatorios no pueden quedar vacíos.
+        El email solo se cambia mientras la cuenta está en SIN_ACCESO o INVITADO.
+      properties:
+        nombre: { type: string, minLength: 2, maxLength: 80 }
+        apellidos: { type: [string, "null"], maxLength: 120 }
+        email: { type: [string, "null"], format: email, description: Opcional hasta invitarle; único en la plataforma }
+        codigo_interno: { type: [string, "null"], maxLength: 30, description: Único en la empresa }
+        puesto: { $ref: '#/components/schemas/Puesto' }
+        tipo_contrato: { $ref: '#/components/schemas/TipoContrato' }
+        turno: { $ref: '#/components/schemas/Turno' }
+        fecha_alta: { type: string, format: date }
+        equipo_id: { type: [integer, "null"] }
+    TipoIncidencia:
+      type: string
+      description: LEG-012 · solo ausencias injustificadas; nunca bajas médicas ni su causa
+      enum: [AUSENCIA_INJUSTIFICADA, RETRASO, SINIESTRO, QUEJA_CLIENTE, RECONOCIMIENTO]
+    Incidencia:
+      type: object
+      properties:
+        id: { type: integer }
+        empleado_id: { type: integer }
+        tipo: { $ref: '#/components/schemas/TipoIncidencia' }
+        fecha: { type: string, format: date }
+        nota: { type: [string, "null"] }
+        registrada_por:
+          type: [object, "null"]
+          properties:
+            id: { type: integer }
+            nombre: { type: string }
+            apellidos: { type: string }
+        creado_en: { type: string }
+    ErrorCsv:
+      type: object
+      properties:
+        fila: { type: [integer, "null"], description: Numeración de Excel (la cabecera es la 1); null = error del archivo }
+        columna: { type: [string, "null"] }
+        motivo: { type: string }
+    ResumenImportacion:
+      type: object
+      properties:
+        simulado: { type: boolean }
+        valido: { type: boolean }
+        filas: { type: integer, description: Filas de datos leídas }
+        altas: { type: integer }
+        cambios: { type: integer }
+        sin_cambios: { type: integer }
+        errores: { type: array, items: { $ref: '#/components/schemas/ErrorCsv' } }
 paths:
   /v1/health:
     get:
@@ -191,3 +294,210 @@ paths:
       security: [{ sesion: [], csrf: [] }]
       parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
       responses: { '201': { description: ok, content: { application/json: { schema: { $ref: '#/components/schemas/Invitacion' } } } } }
+  /v1/teams:
+    get:
+      summary: Equipos de la empresa (GERENTE, RRHH)
+      security: [{ sesion: [] }]
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Equipo' } }
+    post:
+      summary: Crear equipo (GERENTE)
+      security: [{ sesion: [], csrf: [] }]
+      requestBody: { content: { application/json: { schema: { $ref: '#/components/schemas/EquipoEntrada' } } } }
+      responses:
+        '201': { description: Creado, content: { application/json: { schema: { $ref: '#/components/schemas/Equipo' } } } }
+        '403': { description: PH-PERM-001 (RRHH) }
+        '409': { description: PH-VAL-001 nombre duplicado }
+        '422': { description: PH-VAL-001 }
+  /v1/teams/{id}:
+    patch:
+      summary: Editar equipo (GERENTE)
+      security: [{ sesion: [], csrf: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody: { content: { application/json: { schema: { $ref: '#/components/schemas/EquipoEntrada' } } } }
+      responses:
+        '200': { description: ok, content: { application/json: { schema: { $ref: '#/components/schemas/Equipo' } } } }
+        '404': { description: PH-TENANT-001 }
+        '409': { description: PH-VAL-001 nombre duplicado }
+    delete:
+      summary: Borrar equipo (GERENTE, borrado lógico)
+      security: [{ sesion: [], csrf: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses:
+        '204': { description: Borrado }
+        '404': { description: PH-TENANT-001 }
+        '409': { description: PH-VAL-001 el equipo tiene empleados de alta }
+  /v1/employees:
+    get:
+      summary: Plantilla de la empresa (GERENTE, RRHH)
+      security: [{ sesion: [] }]
+      parameters:
+        - { name: situacion, in: query, schema: { type: string, enum: [ALTA, BAJA, TODAS], default: ALTA } }
+        - { name: equipo_id, in: query, schema: { type: integer } }
+        - { name: q, in: query, description: Busca en nombre, apellidos, código interno y email, schema: { type: string, maxLength: 80 } }
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - { name: per_page, in: query, schema: { type: integer, default: 25, maximum: 100 } }
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Empleado' } }
+                  meta: { $ref: '#/components/schemas/Paginacion' }
+    post:
+      summary: Alta de empleado en SIN_ACCESO (GERENTE, RRHH · RF-021)
+      security: [{ sesion: [], csrf: [] }]
+      requestBody: { content: { application/json: { schema: { $ref: '#/components/schemas/EmpleadoEntrada' } } } }
+      responses:
+        '201': { description: Creado, content: { application/json: { schema: { $ref: '#/components/schemas/Empleado' } } } }
+        '409': { description: PH-TENANT-002 límite del plan · PH-VAL-001 email o código interno duplicado }
+        '422': { description: PH-VAL-001 }
+  /v1/employees/import:
+    post:
+      summary: Importar la plantilla por CSV, todo o nada (GERENTE, RRHH · RF-020)
+      description: |
+        Cuerpo: el archivo tal cual, con Content-Type text/csv. UTF-8, separador ";" o ",",
+        cabecera en la primera fila, máximo 1 MB y 250 filas.
+        Columnas: codigo_interno*, nombre*, apellidos, email, puesto*, tipo_contrato*, turno*,
+        fecha_alta* (AAAA-MM-DD o DD/MM/AAAA), equipo (nombre de un equipo existente).
+        codigo_interno existente = cambio de la ficha; nuevo = alta en SIN_ACCESO. No crea invitaciones.
+        Ejemplo: docs/ejemplos/plantilla_empleados.csv
+      security: [{ sesion: [], csrf: [] }]
+      parameters:
+        - name: simular
+          in: query
+          description: 1 = valida y devuelve el resumen sin escribir (con errores responde 200 y valido=false)
+          schema: { type: string, enum: ['0', '1'] }
+      requestBody:
+        required: true
+        content:
+          text/csv:
+            schema: { type: string }
+      responses:
+        '200': { description: Importado o simulado, content: { application/json: { schema: { $ref: '#/components/schemas/ResumenImportacion' } } } }
+        '409': { description: PH-TENANT-002 las altas superan el límite del plan }
+        '415': { description: PH-VAL-001 el cuerpo no es text/csv }
+        '422':
+          description: PH-VAL-002 · no se ha importado ninguna fila
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string, example: PH-VAL-002 }
+                      message: { type: string }
+                      details:
+                        type: object
+                        properties:
+                          errores: { type: array, items: { $ref: '#/components/schemas/ErrorCsv' } }
+                      correlation_id: { type: string }
+  /v1/employees/{id}:
+    get:
+      summary: Ficha del empleado (GERENTE, RRHH)
+      security: [{ sesion: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses:
+        '200': { description: ok, content: { application/json: { schema: { $ref: '#/components/schemas/Empleado' } } } }
+        '404': { description: PH-TENANT-001 }
+    patch:
+      summary: Editar la ficha (GERENTE, RRHH)
+      security: [{ sesion: [], csrf: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody: { content: { application/json: { schema: { $ref: '#/components/schemas/EmpleadoEntrada' } } } }
+      responses:
+        '200': { description: ok, content: { application/json: { schema: { $ref: '#/components/schemas/Empleado' } } } }
+        '404': { description: PH-TENANT-001 }
+        '409': { description: PH-VAL-001 empleado dado de baja, email o código duplicado }
+        '422': { description: PH-VAL-001 }
+    delete:
+      summary: Baja laboral (GERENTE, RRHH · RF-022)
+      description: No borra al usuario. Le retira el acceso, anula sus invitaciones y deja la ficha en solo lectura.
+      security: [{ sesion: [], csrf: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fecha_baja, motivo_baja]
+              properties:
+                fecha_baja: { type: string, format: date, description: No futura ni anterior al alta }
+                motivo_baja: { type: string, enum: [VOLUNTARIA, NO_VOLUNTARIA, FIN_CONTRATO] }
+      responses:
+        '200': { description: Baja registrada, content: { application/json: { schema: { $ref: '#/components/schemas/Empleado' } } } }
+        '404': { description: PH-TENANT-001 }
+        '409': { description: PH-VAL-001 ya estaba de baja }
+        '422': { description: PH-VAL-001 }
+  /v1/employees/{id}/invitation:
+    post:
+      summary: Invitar al empleado (GERENTE, RRHH · RF-023, LEG-016)
+      security: [{ sesion: [], csrf: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email: { type: string, format: email, description: Obligatorio si el empleado aún no tiene email }
+      responses:
+        '201': { description: ok, content: { application/json: { schema: { $ref: '#/components/schemas/Invitacion' } } } }
+        '403': { description: PH-TENANT-003 falta el contrato de encargado del tratamiento }
+        '404': { description: PH-TENANT-001 }
+        '409': { description: PH-VAL-001 empleado de baja o email duplicado }
+        '422': { description: PH-VAL-001 sin email, cuenta ya activa o bloqueada }
+  /v1/employees/{id}/incidents:
+    get:
+      summary: Incidencias del empleado (GERENTE, RRHH)
+      security: [{ sesion: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: tipo, in: query, schema: { $ref: '#/components/schemas/TipoIncidencia' } }
+        - { name: desde, in: query, schema: { type: string, format: date } }
+        - { name: hasta, in: query, schema: { type: string, format: date } }
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - { name: per_page, in: query, schema: { type: integer, default: 25, maximum: 100 } }
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Incidencia' } }
+                  meta: { $ref: '#/components/schemas/Paginacion' }
+        '404': { description: PH-TENANT-001 }
+    post:
+      summary: Registrar una incidencia (GERENTE, RRHH · LEG-012)
+      description: La nota no debe contener información médica ni la causa de una ausencia.
+      security: [{ sesion: [], csrf: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tipo, fecha]
+              properties:
+                tipo: { $ref: '#/components/schemas/TipoIncidencia' }
+                fecha: { type: string, format: date, description: No futura; entre el alta y la baja del empleado }
+                nota: { type: string, maxLength: 500 }
+      responses:
+        '201': { description: Registrada, content: { application/json: { schema: { $ref: '#/components/schemas/Incidencia' } } } }
+        '404': { description: PH-TENANT-001 }
+        '422': { description: PH-VAL-001 }

@@ -30,6 +30,9 @@ final class Request
         if (isset($_SERVER['CONTENT_TYPE'])) {
             $headers['content-type'] = (string) $_SERVER['CONTENT_TYPE'];
         }
+        if (isset($_SERVER['CONTENT_LENGTH'])) {
+            $headers['content-length'] = (string) $_SERVER['CONTENT_LENGTH'];
+        }
         return new self(
             strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET'),
             $path,
@@ -63,6 +66,12 @@ final class Request
             throw new ApiException('PH-VAL-001', 'JSON mal formado', 400);
         }
         return $this->json = $data;
+    }
+
+    /** Cuerpo sin interpretar (importación CSV). */
+    public function body(): string
+    {
+        return $this->rawBody;
     }
 
     public function param(string $name): string
