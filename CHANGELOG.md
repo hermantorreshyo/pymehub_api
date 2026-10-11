@@ -2,6 +2,15 @@
 
 Formato basado en *Keep a Changelog*; versiones SemVer.
 
+## [0.2.1] · 2026-10-11
+
+### Documentación
+- `docs/PROMPT_MAESTRO.md`: prompt maestro para continuar el desarrollo con IA (común a ambos repositorios).
+- `docs/coleccion/`: **colección de Postman** de la API v1 (salud, autenticación, plataforma, cuentas de RR. HH., equipos, empleados, CSV, incidencias, bajas e invitaciones) con captura automática del token CSRF y de los identificadores, y entornos local y producción. Recorrido completo verificado: 30 peticiones correctas.
+- `docs/anexos/`: documento final del TFM, anexo del prototipo de interfaz y presupuesto (Anexo A).
+- `docs/README.md`: índice de la documentación.
+- Sin cambios de código ni de esquema.
+
 ## [0.2.0] · 2026-10-03
 
 ### Añadido

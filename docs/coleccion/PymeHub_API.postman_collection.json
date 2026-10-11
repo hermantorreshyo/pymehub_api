@@ -1,0 +1,987 @@
+{
+  "info": {
+    "name": "Pyme Hub API v1",
+    "_postman_id": "a3d4c0e2-5b1f-5e7c-9d2a-3f6b8c1e0d47",
+    "description": "Colección de la API de Pyme Hub (MVP, TFM EUDE).\n\nUso: 1) importa también el entorno de docs/coleccion; 2) ejecuta 'Login' (guarda la cookie y el token CSRF); 3) las peticiones que modifican datos envían X-CSRF-Token: {{csrf}}.\nContrato completo: docs/openapi.yaml. Se amplía con cada avance.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "00 · Salud",
+      "item": [
+        {
+          "name": "Estado de la API",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "health"
+              ]
+            },
+            "description": "Pública. API, base de datos, disco y última copia (RNF-061)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 · Autenticación",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "RF-001. Guarda la cookie de sesión (Postman la gestiona sola) y el token CSRF en {{csrf}}.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "if (j.data && j.data.csrf_token) { pm.collectionVariables.set('csrf', j.data.csrf_token); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Mi sesión (me)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/auth/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "me"
+              ]
+            },
+            "description": "RF-011. Usuario, perfil, empresa, plan, features y token CSRF."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "if (j.data && j.data.csrf_token) { pm.collectionVariables.set('csrf', j.data.csrf_token); }"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 · Plataforma (ADMIN)",
+      "item": [
+        {
+          "name": "Listar empresas",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/tenants",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "tenants"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Alta de empresa con su gerente",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/tenants",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "tenants"
+              ]
+            },
+            "description": "Devuelve la invitación del gerente (enlace de un solo uso, 72 h).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Reparto Rápido Castilla S.L.\",\n  \"nif\": \"B12345678\",\n  \"plan\": \"COMPLETO\",\n  \"ciclo_cobro\": \"MENSUAL\",\n  \"limite_empleados\": 60,\n  \"fecha_contrato_encargado\": \"2026-10-01\",\n  \"estado\": \"PILOTO\",\n  \"gerente\": {\n    \"nombre\": \"Ana\",\n    \"apellidos\": \"García\",\n    \"email\": \"gerente@castilla.test\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "try { pm.collectionVariables.set('empresa_id', j.data.id); } catch (e) {}",
+                  "try { pm.collectionVariables.set('token_invitacion', j.data.invitacion_gerente.enlace.split('/').pop()); } catch (e) {}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ver empresa",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/tenants/{{empresa_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "tenants",
+                "{{empresa_id}}"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Cambiar plan, ciclo o estado",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/tenants/{{empresa_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "tenants",
+                "{{empresa_id}}"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plan\": \"ENTRADA\",\n  \"ciclo_cobro\": \"ANUAL\",\n  \"cuota_ia_diaria\": 50\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Métricas de la plataforma",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/metrics",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "metrics"
+              ]
+            },
+            "description": "Empresas por estado, empleados activos y MRR teórico."
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 · Cuentas de RR. HH. (GERENTE)",
+      "item": [
+        {
+          "name": "Listar cuentas de gestión",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/users",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "users"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Crear cuenta de RR. HH.",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/users",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "users"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Lucía\",\n  \"apellidos\": \"Prieto\",\n  \"email\": \"rrhh@castilla.test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "try { pm.collectionVariables.set('usuario_id', j.data.id); } catch (e) {}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Bloquear cuenta",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/users/{{usuario_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "{{usuario_id}}"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado_acceso\": \"BLOQUEADO\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Nueva invitación",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/users/{{usuario_id}}/invitation",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "{{usuario_id}}",
+                "invitation"
+              ]
+            },
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 · Equipos",
+      "item": [
+        {
+          "name": "Listar equipos (GERENTE, RRHH)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/teams",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "teams"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Crear equipo (GERENTE)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/teams",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "teams"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Zona Norte\",\n  \"zona\": \"Madrid norte\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "try { pm.collectionVariables.set('equipo_id', j.data.id); } catch (e) {}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Editar equipo (GERENTE)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/teams/{{equipo_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "teams",
+                "{{equipo_id}}"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"zona\": \"Madrid norte y Alcobendas\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 · Empleados",
+      "item": [
+        {
+          "name": "Listar empleados",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/employees?situacion=ALTA&q=&page=1&per_page=25",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "employees"
+              ],
+              "query": [
+                {
+                  "key": "situacion",
+                  "value": "ALTA"
+                },
+                {
+                  "key": "q",
+                  "value": ""
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "per_page",
+                  "value": "25"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Alta de empleado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/employees",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "employees"
+              ]
+            },
+            "description": "RF-021. El empleado queda SIN_ACCESO hasta que se le invite (RF-122).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Javier\",\n  \"apellidos\": \"Ruiz Sánchez\",\n  \"email\": \"javier.ruiz@castilla.test\",\n  \"codigo_interno\": \"EMP-002\",\n  \"puesto\": \"CONDUCTOR\",\n  \"tipo_contrato\": \"TEMPORAL\",\n  \"turno\": \"NOCHE\",\n  \"fecha_alta\": \"2026-08-01\",\n  \"equipo_id\": {{equipo_id}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "try { pm.collectionVariables.set('empleado_id', j.data.id); } catch (e) {}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ver ficha",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/employees/{{empleado_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "employees",
+                "{{empleado_id}}"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Editar ficha",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/employees/{{empleado_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "employees",
+                "{{empleado_id}}"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"turno\": \"ROTATIVO\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Invitar al empleado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/employees/{{empleado_id}}/invitation",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "employees",
+                "{{empleado_id}}",
+                "invitation"
+              ]
+            },
+            "description": "Exige fecha de contrato de encargado (LEG-016, PH-TENANT-003).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"javier.ruiz@castilla.test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Importar CSV (simulación)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "text/csv"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/employees/import?simular=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "employees",
+                "import"
+              ],
+              "query": [
+                {
+                  "key": "simular",
+                  "value": "1"
+                }
+              ]
+            },
+            "description": "RF-020. Todo o nada. Plantilla en docs/ejemplos/plantilla_empleados.csv. Quita ?simular=1 para importar.",
+            "body": {
+              "mode": "raw",
+              "raw": "codigo_interno;nombre;apellidos;email;puesto;tipo_contrato;turno;fecha_alta;equipo\nEMP-010;Marta;López;;MOZO_ALMACEN;INDEFINIDO;NOCHE;2025-11-04;Zona Norte"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 · Incidencias",
+      "item": [
+        {
+          "name": "Listar incidencias",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/employees/{{empleado_id}}/incidents",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "employees",
+                "{{empleado_id}}",
+                "incidents"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Registrar incidencia",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/employees/{{empleado_id}}/incidents",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "employees",
+                "{{empleado_id}}",
+                "incidents"
+              ]
+            },
+            "description": "Tipos (LEG-012): AUSENCIA_INJUSTIFICADA, RETRASO, SINIESTRO, QUEJA_CLIENTE, RECONOCIMIENTO.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tipo\": \"RECONOCIMIENTO\",\n  \"fecha\": \"2026-10-05\",\n  \"nota\": \"Felicitación de un cliente\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 · Bajas y borrados",
+      "description": "Al final, para no romper el resto de peticiones.",
+      "item": [
+        {
+          "name": "Baja laboral",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/employees/{{empleado_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "employees",
+                "{{empleado_id}}"
+              ]
+            },
+            "description": "RF-022. Conserva el registro para medir la rotación. Motivos: VOLUNTARIA, NO_VOLUNTARIA, FIN_CONTRATO.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fecha_baja\": \"2026-10-10\",\n  \"motivo_baja\": \"VOLUNTARIA\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Eliminar cuenta",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/users/{{usuario_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "{{usuario_id}}"
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Borrar equipo vacío (GERENTE)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/teams/{{equipo_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "teams",
+                "{{equipo_id}}"
+              ]
+            },
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 · Invitaciones (sin sesión)",
+      "item": [
+        {
+          "name": "Aceptar invitación",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/auth/invitations/accept",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "invitations",
+                "accept"
+              ]
+            },
+            "description": "RF-005, LEG-001. El token es la última parte del enlace de invitación (lo guarda 'Alta de empresa').",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{token_invitacion}}\",\n  \"password\": \"Contraseña#Segura1\",\n  \"acepta_privacidad\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 · Cerrar sesión",
+      "item": [
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/auth/logout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "logout"
+              ]
+            },
+            "description": "RF-008. Destruye la sesión en el servidor."
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://api.pymehub.hermantorres.com"
+    },
+    {
+      "key": "email",
+      "value": "admin@pymehub.test"
+    },
+    {
+      "key": "password",
+      "value": ""
+    },
+    {
+      "key": "csrf",
+      "value": ""
+    },
+    {
+      "key": "empresa_id",
+      "value": ""
+    },
+    {
+      "key": "usuario_id",
+      "value": ""
+    },
+    {
+      "key": "equipo_id",
+      "value": ""
+    },
+    {
+      "key": "empleado_id",
+      "value": ""
+    },
+    {
+      "key": "token_invitacion",
+      "value": ""
+    }
+  ]
+}

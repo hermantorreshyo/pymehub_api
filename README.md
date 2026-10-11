@@ -29,6 +29,10 @@ tests/         Prueba de humo
 | [`docs/manuales/01_MANUAL_DESPLIEGUE.md`](docs/manuales/01_MANUAL_DESPLIEGUE.md) | Despliegue en el VPS, HTTPS, copias, monitorización y actualizaciones |
 | [`docs/base_de_datos/MODELO_DATOS.md`](docs/base_de_datos/MODELO_DATOS.md) | Modelo interlocutor/usuario y diagrama |
 | [`docs/openapi.yaml`](docs/openapi.yaml) | Contrato con el frontend |
+| [`docs/coleccion/`](docs/coleccion/) | Colección de Postman y entornos |
+| [`docs/PROMPT_MAESTRO.md`](docs/PROMPT_MAESTRO.md) | Prompt maestro para continuar el desarrollo con IA |
+| [`docs/anexos/`](docs/anexos/) | Documento del TFM y anexos |
+| [`docs/README.md`](docs/README.md) | Índice completo de la documentación |
 
 ## Desarrollo local
 
@@ -41,4 +45,4 @@ tests/smoke_test.sh http://127.0.0.1:8080 http://127.0.0.1:5500 admin@local.test
 
 ## Estado
 
-Versión **0.2.0**: núcleo, seguridad, instalación, empresas, cuentas de gestión e invitaciones (fases 1 y 2) y organización: equipos, empleados, importación CSV e incidencias (fase 3). El plan de construcción completo está en el documento de requisitos técnicos del MVP (§21).
+Versión **0.2.1** (documentación sobre la 0.2.0): núcleo, seguridad, instalación, empresas, cuentas de gestión e invitaciones (fases 1 y 2) y organización: equipos, empleados, importación CSV e incidencias (fase 3). El plan de construcción completo está en el documento de requisitos técnicos del MVP (§21).
