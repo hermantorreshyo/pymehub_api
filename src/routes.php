@@ -8,8 +8,10 @@ use PymeHub\Controllers\V1\CheckinController as Checkins;
 use PymeHub\Controllers\V1\AuthController as AuthC;
 use PymeHub\Controllers\V1\EmpleadoController as Empleados;
 use PymeHub\Controllers\V1\EquipoController as Equipos;
+use PymeHub\Controllers\V1\FormacionController as Formacion;
 use PymeHub\Controllers\V1\HealthController as Health;
 use PymeHub\Controllers\V1\IncidenciaController as Incidencias;
+use PymeHub\Controllers\V1\MiFormacionController as MiFormacion;
 use PymeHub\Controllers\V1\UsuarioController as Usuarios;
 use PymeHub\Core\Router;
 use PymeHub\Middleware\Auth;
@@ -25,6 +27,7 @@ return static function (Router $r): void {
     $gestion = Auth::require('GERENTE', 'RRHH');
     $empleado = Auth::require('EMPLEADO');
     $planBienestar = Auth::plan('bienestar');
+    $planFormacion = Auth::plan('formacion');
 
     // Salud (pública)
     $r->add('GET', '/v1/health', [Health::class, 'show']);
@@ -70,6 +73,26 @@ return static function (Router $r): void {
     $r->add('POST', '/v1/me/checkins', [Checkins::class, 'store'], [$empleado, $planBienestar, $csrf]);
     $r->add('GET',  '/v1/me/checkins', [Checkins::class, 'index'], [$empleado, $planBienestar]);
     $r->add('GET',  '/v1/wellbeing/summary', [Bienestar::class, 'summary'], [$gestion, $planBienestar]);
+
+    // Formación (§8.5, fase 5): gestión
+    $r->add('GET',    '/v1/training/modules', [Formacion::class, 'modules'], [$gestion, $planFormacion]);
+    $r->add('POST',   '/v1/training/modules', [Formacion::class, 'storeModule'], [$gestion, $planFormacion, $csrf]);
+    $r->add('GET',    '/v1/training/modules/{id}', [Formacion::class, 'module'], [$gestion, $planFormacion]);
+    $r->add('PATCH',  '/v1/training/modules/{id}', [Formacion::class, 'updateModule'], [$gestion, $planFormacion, $csrf]);
+    $r->add('POST',   '/v1/training/modules/{id}/publish', [Formacion::class, 'publish'], [$gestion, $planFormacion, $csrf]);
+    $r->add('GET',    '/v1/training/assignments', [Formacion::class, 'assignments'], [$gestion, $planFormacion]);
+    $r->add('POST',   '/v1/training/assignments', [Formacion::class, 'assign'], [$gestion, $planFormacion, $csrf]);
+    $r->add('DELETE', '/v1/training/assignments/{id}', [Formacion::class, 'unassign'], [$gestion, $planFormacion, $csrf]);
+    $r->add('GET',    '/v1/training/recommendations', [Formacion::class, 'recommendations'], [$gestion, $planFormacion]);
+    $r->add('GET',    '/v1/training/summary', [Formacion::class, 'summary'], [$gestion, $planFormacion]);
+
+    // Formación del empleado
+    $r->add('GET',  '/v1/me/training', [MiFormacion::class, 'index'], [$empleado, $planFormacion]);
+    $r->add('GET',  '/v1/me/training/catalog', [MiFormacion::class, 'catalog'], [$empleado, $planFormacion]);
+    $r->add('POST', '/v1/me/training/enroll', [MiFormacion::class, 'enroll'], [$empleado, $planFormacion, $csrf]);
+    $r->add('GET',  '/v1/me/training/{id}', [MiFormacion::class, 'show'], [$empleado, $planFormacion]);
+    $r->add('POST', '/v1/me/training/{id}/progress', [MiFormacion::class, 'progress'], [$empleado, $planFormacion, $csrf]);
+    $r->add('POST', '/v1/me/training/{id}/submit', [MiFormacion::class, 'submit'], [$empleado, $planFormacion, $csrf]);
 
     // Alertas (§8.4): bienestar en ambos planes; riesgo de rotación solo en Completo
     $r->add('GET',   '/v1/alerts', [Alertas::class, 'index'], [$gestion]);

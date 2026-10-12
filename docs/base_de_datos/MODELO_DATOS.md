@@ -114,9 +114,9 @@ erDiagram
 | `equipo` | Equipos de la empresa | Nombre único entre los vigentes; no se borra si tiene empleados de alta |
 | `ficha_laboral` | Datos laborales del empleado | `motivo_baja` permite medir la rotación voluntaria |
 | `incidencia` | Ausencias injustificadas, retrasos, siniestros, quejas, reconocimientos | Sin bajas médicas (LEG-012) |
-| `modulo_formativo` | Micro-módulos | El propietario es un interlocutor: plataforma = catálogo global |
+| `modulo_formativo` | Micro-módulos | El propietario es un interlocutor: plataforma = catálogo global (15 módulos, `data/catalogo_formativo.php`, sincronizado por `codigo` con `cli/catalog_sync.php`); empresa = módulo propio. `huella` (0004): SHA-256 del contenido global para versionarlo solo cuando cambia |
 | `pregunta_modulo` | Cuestionario | 2–4 opciones |
-| `asignacion_formativa` | Formación de cada empleado | Origen: gestión, autoinscripción o asesor de IA |
+| `asignacion_formativa` | Formación de cada empleado | Origen: gestión, autoinscripción o asesor de IA. Una por persona y módulo. `VENCIDA` se calcula al leer (no completada con la fecha límite pasada). Desde 0004: `bloque_actual` (retomar), `ultima_nota` y `ultimo_envio` (cuestionario idempotente desde la cola sin conexión) |
 | `preferencia_formativa` | Preferencias para el asesor | Solo las ve el empleado (LEG-014) |
 | `checkin_bienestar` | Check-in diario | Nota cifrada; equipo guardado en el momento del check-in |
 | `puntuacion_riesgo` | Score de rotación | Histórico con factores y versión de reglas |

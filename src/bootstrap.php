@@ -7,7 +7,7 @@ declare(strict_types=1);
  */
 
 define('PH_ROOT', dirname(__DIR__));
-define('PH_VERSION', '0.3.2');
+define('PH_VERSION', '0.4.0');
 
 spl_autoload_register(static function (string $class): void {
     $prefix = 'PymeHub\\';

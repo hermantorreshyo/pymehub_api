@@ -60,7 +60,7 @@ Roles (`usuario.perfil`): `ADMIN` (plataforma, no ve datos de empleados), `GEREN
 | 3 | Equipos, empleados, CSV, incidencias | Hecho (API 0.2.0, web 0.1.0) |
 | — | Sitio público, acceso en pantalla partida, línea gráfica de la *landing*, documentación | Hecho (web 0.2.0, API 0.2.1) |
 | 4 | Bienestar: check-in (también sin conexión), historial, agregados anónimos, alertas, datos demo | Hecho (API 0.3.0, web 0.3.0) |
-| 5 | Upskilling | Pendiente |
+| 5 | Upskilling: catálogo de 15 módulos, asignación, reproductor con cuestionario (también sin conexión), autoinscripción, recomendaciones por reglas, módulos propios, incidencias y formación en la demo | Hecho (API 0.4.0, web 0.4.0) |
 | 6 | Asesor de formación con IA | Pendiente |
 | 7 | IA de RR. HH. (motor de riesgo v1.1) | Pendiente |
 | 8–10 | PWA completa, operación, resto de datos demo (`cli/demo_seed.php`), cierre y capturas del Anexo D | Pendiente |

@@ -2,7 +2,7 @@
 
 **Proyecto:** Pyme Hub — TFM EUDE Business School (The Best Team)
 **Documento:** Especificación de requerimientos técnicos del Producto Mínimo Viable (MVP)
-**Versión:** 0.9.1 · 12/10/2026
+**Versión:** 0.9.2 · 12/10/2026
 **Stack:** LAMP nativo, sin Docker (Linux · Apache · **MariaDB 11.8 LTS o MySQL 8.4 LTS** · PHP 8.4). Producción: MariaDB 11.8
 **Repositorios:** dos, independientes: `pymehub_api` (backend tipo API) y `pymehub_web` (frontend que consume la API)
 **Estado:** Alineado con la versión 4 del documento del TFM (carpeta *Revisión 004*). Los cambios que este documento obliga a trasladar al TFM se listan en §22.3.
@@ -21,6 +21,7 @@
 | 0.8 | 03/10/2026 | Fase 3 (Organización): `RF-020` importación CSV de la plantilla y `RF-021` a `RF-023` (empleados, baja laboral e invitación de empleados) en §8.3; `LEG-016` referido a la columna real `interlocutor.fecha_contrato_encargado` |
 | 0.9 | 12/10/2026 | **Compatibilidad con MariaDB 11.8 LTS** (`DEC-05`): el VPS de producción ya usa MariaDB 11.8.6 con otras aplicaciones y no se puede sustituir. La API funciona sobre MySQL 8.4 y MariaDB 11.8 con el SQL común a ambos (`RNF-009`). Instalador con detección de motor y versión mínima por motor (`RF-091`), collation comprobada antes de migrar, conexión por socket, copias con `mariadb-dump` o `mysqldump` (`RNF-064`). `P-11` cerrado |
 | 0.9.1 | 12/10/2026 | Rutas reales de producción: `/var/www/hermantorres/eude/pymehub/pymehub_api` y `/var/www/hermantorres/eude/pymehub/pymehub_web` (§3.2, §4.1) |
+| 0.9.2 | 12/10/2026 | Fase 5 (Upskilling): §8.5 con el seguimiento (`GET /v1/training/assignments`), la retirada de asignaciones y el resumen (`GET /v1/training/summary`); §10 con el detalle de `RF-041` a `RF-047` (estado `VENCIDA` calculado, idempotencia del cuestionario sin conexión, reglas de `RF-043` sin datos individuales de bienestar) |
 
 ---
 
@@ -431,7 +432,9 @@ Roles: **A** admin · **G** gerente · **H** RR. HH. · **E** empleado. Plan: **
 | GET/POST | `/v1/training/modules` | G H |
 | GET/PATCH | `/v1/training/modules/{id}` | G H |
 | POST | `/v1/training/modules/{id}/publish` (publica un módulo propio) | G H |
-| POST | `/v1/training/assignments` | G H |
+| GET/POST | `/v1/training/assignments` (seguimiento con filtros y asignación) | G H |
+| DELETE | `/v1/training/assignments/{id}` (retira una asignación de la empresa no completada) | G H |
+| GET | `/v1/training/summary` (indicadores de formación) | G H |
 | GET | `/v1/training/recommendations?employee_id=` | G H |
 | GET | `/v1/me/training` | E |
 | GET | `/v1/me/training/catalog?category=&level=` | E |
@@ -556,6 +559,13 @@ Máximo teórico: 100 puntos (F1 30 + F2 25 + F3 15 + F4 10 + F5 10 + F6 10); el
 - `RF-045` (M) Completable sin conexión (`RF-062`).
 - `RF-046` (S) El gerente puede crear módulos propios (sin IA).
 - `RF-047` (M) El empleado puede **autoinscribirse** en cualquier módulo publicado, sin fecha límite. Las autoinscripciones no puntúan en el motor de riesgo como formación vencida.
+
+**Implementación (v0.4.0):**
+- El catálogo global vive en `data/catalogo_formativo.php` y se sincroniza por `codigo` (instalador, `cli/migrate.php`, `cli/catalog_sync.php`); si cambia el contenido sube la versión del módulo sin tocar el avance. Las opciones de cada pregunta se ordenan de forma determinista para que la correcta no esté siempre en la misma posición.
+- Una asignación por persona y módulo. Si la gestión asigna un módulo en el que la persona ya se había autoinscrito, pasa a ser de la empresa con la nueva fecha límite. `VENCIDA` es un estado calculado: no completada con la fecha límite pasada.
+- El reproductor nunca recibe la solución del cuestionario; la corrección es en el servidor y la solución solo se muestra al aprobar. El avance es monótono (nunca retrocede) y no llega al 100 % sin aprobar. Cada envío del cuestionario lleva un `envio_id`: reenviarlo desde la cola sin conexión no suma un intento (`RF-045`, `RF-062`).
+- `RF-043`: las reglas usan incidencias de los últimos 90 días, la antigüedad y las **alertas de bienestar de equipo** (dato agregado); nunca respuestas individuales del check-in (§9.2, `LEG-013`). Siniestro → *Seguridad vial en ciudad* (y *Conducción nocturna* en turno de noche); queja → *Atención al cliente* (y *Clientes difíciles* si hay más de una); alerta del equipo → *Gestión del estrés*; menos de 30 días → *Herramientas digitales* y el módulo básico del puesto. La gestión decide si asigna.
+- `RF-046`: los módulos propios se escriben en un editor (bloques de texto, lista, consejo e ilustración de marca, 2–4 preguntas), se guardan como borrador y se publican en el catálogo de la empresa. El catálogo global no se edita (`PH-PERM-001`).
 
 ---
 

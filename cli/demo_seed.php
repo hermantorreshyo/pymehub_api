@@ -50,4 +50,6 @@ echo "Reparto Rápido Castilla S.L. (Completo): {$r['castilla']['empleados']} em
 echo "Mensajería Tajo S.L. (Entrada): {$r['tajo']['empleados']} empleados\n";
 echo "Check-ins de bienestar: {$r['checkins']}\n";
 echo "Alertas de bienestar: {$r['alertas']}\n";
+echo "Incidencias: {$r['incidencias']}\n";
+echo "Formación asignada o en curso: {$r['formacion']}\n";
 echo "Usuarios: admin@, gerente@, rrhh@, conductor@ y gerente2@ " . DemoService::DOMINIO . "\n";

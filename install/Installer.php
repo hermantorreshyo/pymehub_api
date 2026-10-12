@@ -161,6 +161,9 @@ final class Installer
                  VALUES (?, 'PLATAFORMA', 'ADMIN', ?, ?, ?, ?, 'ACTIVO', UTC_TIMESTAMP())"
             );
             $st->execute([$platformId, $in['admin_nombre'], $in['admin_apellidos'], mb_strtolower($in['admin_email']), password_hash($in['admin_password'], PASSWORD_ARGON2ID)]);
+            // Catálogo global de formación (RF-040)
+            \PymeHub\Core\Db::usar($pdo);
+            \PymeHub\Services\CatalogoService::sincronizar();
         } catch (\Throwable $e) {
             $this->render($checks, ['Error al crear el esquema: ' . $e->getMessage() . '. Vacía la base de datos y vuelve a intentarlo.'], $in);
             return;

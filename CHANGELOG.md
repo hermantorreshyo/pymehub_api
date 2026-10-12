@@ -2,6 +2,40 @@
 
 Formato basado en *Keep a Changelog*; versiones SemVer.
 
+## [0.4.0] · 2026-10-12
+
+Avance 3 · **Formación adaptativa** (fase 5 del plan, §10). Incluye las correcciones de despliegue detectadas en la instalación de producción. **Migración nueva: `0004_formacion_avance`.**
+
+### Base de datos
+- `0004_formacion_avance`: `asignacion_formativa.bloque_actual`, `ultima_nota` y `ultimo_envio` (cuestionario idempotente desde la cola sin conexión, `RF-045`, `RF-062`), índice `ix_asignacion_modulo` y `modulo_formativo.huella`. Probada en MariaDB 11.8.3 y MySQL (`RNF-009`).
+- Catálogo global de **15 micro-módulos** del sector (`RF-040`, `RF-041`) en `data/catalogo_formativo.php`: conducción y seguridad vial, almacén y carga, cliente y entrega, bienestar y desarrollo profesional. Cada uno con objetivos, 3–4 bloques y 2–3 preguntas.
+
+### Núcleo
+- `Services/CatalogoService`: sincroniza el catálogo por `codigo`, sube la versión solo si cambia el contenido y ordena las opciones de forma determinista. Lo ejecutan el instalador, `cli/migrate.php` y el nuevo `cli/catalog_sync.php`.
+- `Services/FormacionService`: corrección del cuestionario (≥ 70 %, `RF-044`), validación de módulos propios (`RF-046`), recomendaciones por reglas (`RF-043`, sin datos individuales de bienestar) y resumen de la empresa.
+- `Repositories/ModuloRepository` y `AsignacionRepository` (estado `VENCIDA` calculado al leer; avance monótono).
+- `Db::usar()` para que el instalador cree el catálogo con su propia conexión.
+
+### Endpoints
+- Gestión (GERENTE, RRHH; plan con `formacion`): `GET/POST /v1/training/modules`, `GET/PATCH /v1/training/modules/{id}`, `POST /v1/training/modules/{id}/publish`, `GET/POST /v1/training/assignments` (`RF-042`), `DELETE /v1/training/assignments/{id}`, `GET /v1/training/recommendations`, `GET /v1/training/summary`.
+- Empleado: `GET /v1/me/training`, `GET /v1/me/training/catalog`, `POST /v1/me/training/enroll` (`RF-047`, `PH-TRN-002`), `GET /v1/me/training/{id}` (sin soluciones), `POST …/progress`, `POST …/submit` (`PH-TRN-001` si no es suya).
+
+### Seguridad
+- La solución del cuestionario nunca llega al reproductor; solo se devuelve al aprobar.
+- Aislamiento: los módulos propios de una empresa no existen para otra (`PH-TENANT-001`); el catálogo global no se edita (`PH-PERM-001`).
+- Límites de peticiones en inscripción y cuestionario.
+
+### Operación
+- `cli/backup.sh` recupera el permiso de ejecución en el repositorio (se había perdido).
+- `cli/demo_seed.php`: seis meses de incidencias, campañas de formación por equipo, autoinscripciones, un módulo propio de Castilla y, para `conductor@`, un módulo completado y otro a medias.
+- `tests/smoke_test.sh`: **113 comprobaciones** (26 de formación). Si no puede iniciar sesión como administrador se detiene con un mensaje claro en lugar de dar 75 fallos.
+
+### Documentación
+- OpenAPI 0.4.0 con los 11 endpoints de formación y sus esquemas.
+- Colección de Postman: carpetas «10 · Formación (GERENTE, RRHH)» y «11 · Formación del empleado».
+- Manual 01 con lo aprendido en la instalación de producción: `mariadb -u root -p`, `php8.4-intl`, permisos de `backup.sh` y `storage/`, `/etc/cron.d/pymehub` en lugar de `crontab -e`, bloqueo también en el `-le-ssl.conf`, `DocumentRoot …/public`, aviso sobre los textos de ejemplo y nuevos problemas frecuentes.
+- Requisitos v0.9.2, modelo de datos, prompt maestro y README.
+
 ## [0.3.2] · 2026-10-12
 
 Corrige las rutas de producción. Sin cambios de comportamiento ni migraciones.

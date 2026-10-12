@@ -1,15 +1,17 @@
 # Manual 01 · Despliegue de Pyme Hub
 
-**Aplica a:** `pymehub_api` 0.3.2 y `pymehub_web` 0.3.0
+**Aplica a:** `pymehub_api` 0.4.0 y `pymehub_web` 0.4.0
 **Entorno:** VPS Hostinger · Debian 13 · Apache 2.4 · PHP 8.4 · **MariaDB 11.8 LTS** (o MySQL 8.4 LTS) · sin Docker
 **Dominios:** `api.pymehub.hermantorres.com` (API) y `pymehub.hermantorres.com` (web)
-**Última revisión:** 12/10/2026 (compatibilidad con MariaDB 11.8, `DEC-05`; rutas de producción)
+**Última revisión:** 12/10/2026 (v0.4.0: formación y lecciones del primer despliegue en producción)
 **Rutas en el servidor:**
 
 | Repositorio | Ruta | DocumentRoot |
 |---|---|---|
 | `pymehub_api` | `/var/www/hermantorres/eude/pymehub/pymehub_api` | `…/pymehub_api/public` |
 | `pymehub_web` | `/var/www/hermantorres/eude/pymehub/pymehub_web` | `…/pymehub_web/public` |
+
+> **Los comandos de este manual llevan textos de ejemplo** en mayúsculas (`TU_CONTRASEÑA_ADMIN`, `CONTRASEÑA-DE-LA-DEMO`…). Sustitúyelos por el valor real antes de ejecutarlos: copiados tal cual, el comando falla (por ejemplo, la prueba de humo da 12 correctas y 75 fallidas porque no puede iniciar sesión).
 
 `/var/www/hermantorres` pertenece a otro sitio del mismo servidor: **no cambies su propietario ni sus permisos**. Aplica `chown` y `chmod` solo dentro de `…/eude/pymehub/pymehub_api` y `…/eude/pymehub/pymehub_web`.
 
@@ -110,8 +112,11 @@ systemctl is-active mariadb
 Si la base y el usuario ya existen (caso de producción, manual 02), comprueba solo los permisos y el host del usuario.
 
 ```bash
-sudo mariadb          # o: sudo mysql
+sudo mariadb          # si root entra por socket (instalación por defecto de Debian)
+mariadb -u root -p    # si root tiene contraseña (VPS de producción): "Access denied" con sudo mariadb
 ```
+
+En los comandos de este manual, `sudo mariadb` puede sustituirse siempre por `mariadb -u root -p`.
 
 ```sql
 CREATE DATABASE pymehub CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
@@ -194,8 +199,8 @@ sudo -u pymehub git clone https://github.com/hermantorreshyo/pymehub_api.git /va
 sudo -u pymehub git clone https://github.com/hermantorreshyo/pymehub_web.git /var/www/hermantorres/eude/pymehub/pymehub_web
 
 # Fijar la versión que se despliega (etiqueta)
-cd /var/www/hermantorres/eude/pymehub/pymehub_api && sudo -u pymehub git checkout v0.3.2
-cd /var/www/hermantorres/eude/pymehub/pymehub_web && sudo -u pymehub git checkout v0.3.0
+cd /var/www/hermantorres/eude/pymehub/pymehub_api && sudo -u pymehub git checkout v0.4.0
+cd /var/www/hermantorres/eude/pymehub/pymehub_web && sudo -u pymehub git checkout v0.4.0
 ```
 
 Permisos de la API: el código es de solo lectura para Apache; solo `storage/` y `config/` son escribibles.
@@ -207,6 +212,19 @@ sudo find . -type d -exec chmod 750 {} \;
 sudo find . -type f -exec chmod 640 {} \;
 sudo chmod 750 cli/backup.sh tests/smoke_test.sh
 sudo chmod 2770 storage config
+sudo -u www-data mkdir -p storage/backups storage/logs
+```
+
+`www-data` debe poder **leer** `cli/backup.sh` (grupo `www-data` y permiso 750). Si el código lo copió otro usuario, `sudo -u www-data bash cli/backup.sh` falla con *Permission denied*: repite el `chown` de arriba. Lanzar el script con `bash` delante funciona aunque se pierda el permiso de ejecución al copiar o descomprimir.
+
+Web (solo archivos estáticos):
+
+```bash
+cd /var/www/hermantorres/eude/pymehub/pymehub_web
+sudo chown -R pymehub:www-data .
+sudo find . -type d -exec chmod 750 {} \;
+sudo find . -type f -exec chmod 640 {} \;
+sudo -u pymehub cp public/js/config.example.js public/js/config.js    # apiUrl: https://api.pymehub.hermantorres.com
 ```
 
 ---
@@ -332,7 +350,14 @@ Los `.htaccess` con `Require all denied` de `config/`, `storage/`, `src/`, `cli/
    grep -RhiE "ServerName|DocumentRoot" /etc/apache2/sites-enabled/ | paste - - | grep -i "hermantorres.com"
    ```
 
-2. Si es `/var/www/hermantorres` o una carpeta superior, añade en **los vhosts de `hermantorres.com`** (puerto 80 y `-le-ssl.conf`) este bloque. Solo afecta a las URL de ese sitio, no a los subdominios de Pyme Hub:
+2. Si es `/var/www/hermantorres` o una carpeta superior, añade en **todos los vhosts de `hermantorres.com`** este bloque. Certbot crea un archivo aparte para HTTPS (`*-le-ssl.conf`): si solo lo pones en el del puerto 80, `https://hermantorres.com/eude/pymehub/…/.git/HEAD` sigue respondiendo **200**. Para ver qué archivos atienden el dominio:
+
+   ```bash
+   sudo apache2ctl -S 2>/dev/null | grep -i "hermantorres.com"
+   grep -Rln "eude/pymehub" /etc/apache2/sites-enabled/     # en cuáles está ya el bloque
+   ```
+
+   El bloque: Solo afecta a las URL de ese sitio, no a los subdominios de Pyme Hub:
 
    ```apache
    # Pyme Hub se sirve solo por sus subdominios: aquí no debe verse nada
@@ -348,7 +373,7 @@ Los `.htaccess` con `Require all denied` de `config/`, `storage/`, `src/`, `cli/
 3. Verifica. Las cuatro peticiones deben devolver **403 o 404**:
 
    ```bash
-   for u in eude/pymehub/pymehub_api/config/config.php eude/pymehub/pymehub_api/storage/ultima_copia.txt \
+   for u in eude/pymehub/pymehub_api/config/config.php eude/pymehub/pymehub_api/storage/backups/ultima_copia.txt \
             eude/pymehub/pymehub_api/.git/HEAD eude/pymehub/pymehub_web/.git/HEAD; do
      echo "$(curl -s -o /dev/null -w '%{http_code}' https://hermantorres.com/$u)  $u"; done
    ```
@@ -373,7 +398,7 @@ Abre `https://api.pymehub.hermantorres.com/install` y completa:
 
 | Campo | Valor |
 |---|---|
-| Servidor / Puerto | `127.0.0.1` / `3306` |
+| Servidor / Puerto | `localhost` o `127.0.0.1` / `3306`, según el host del usuario (apartado 6) |
 | Base de datos / Usuario / Contraseña | los del apartado 6 |
 | URL de esta API | `https://api.pymehub.hermantorres.com` |
 | URL del frontend | `https://pymehub.hermantorres.com` |
@@ -382,11 +407,12 @@ Abre `https://api.pymehub.hermantorres.com/install` y completa:
 | Administrador | tu nombre, email y una contraseña de al menos 12 caracteres |
 | Clave de Mistral | opcional; sin ella, el asesor funciona sin conexión |
 
-El asistente comprueba el servidor, rechaza MariaDB y versiones de MySQL anteriores a 8.4, exige una base vacía, crea el esquema y el administrador, escribe `config/config.php` y se bloquea.
+El asistente comprueba el servidor (incluidas las extensiones, también `intl`: `sudo apt install php8.4-intl` y `sudo systemctl reload apache2` si falta), rechaza MariaDB anterior a 11.4.5 y MySQL anterior a 8.4, exige una base vacía, crea el esquema, el catálogo de formación (15 módulos) y el administrador, escribe `config/config.php` y se bloquea.
 
 Después:
 
 ```bash
+sudo chown root:www-data /var/www/hermantorres/eude/pymehub/pymehub_api/config/config.php
 sudo chmod 640 /var/www/hermantorres/eude/pymehub/pymehub_api/config/config.php
 sudo cp /var/www/hermantorres/eude/pymehub/pymehub_api/config/config.php ~/config.pymehub.$(date +%F).php   # y guárdalo fuera del servidor
 ```
@@ -401,7 +427,7 @@ Para la defensa, la API incluye un generador de datos **ficticios** (`LEG-009`).
 - «Reparto Rápido Castilla S.L.»: plan Completo, 48 empleados y 4 equipos.
 - «Mensajería Tajo S.L.»: plan Entrada, 15 empleados y 2 equipos.
 
-También genera 60 días de check-ins, con el equipo Nocturno empeorando, y sus alertas.
+También genera 60 días de check-ins, con el equipo Nocturno empeorando, y sus alertas; seis meses de incidencias (siniestros, quejas, retrasos y reconocimientos), campañas de formación por equipo con distinto avance, autoinscripciones y un módulo propio de Castilla.
 
 ```bash
 cd /var/www/hermantorres/eude/pymehub/pymehub_api
@@ -418,7 +444,9 @@ sudo -u www-data php cli/demo_seed.php --borrar                                 
 | `conductor@pymehub.demo` | Empleado (conductor de noche, 2 meses) | Castilla (Completo) |
 | `gerente2@pymehub.demo` | Gerencia | Tajo (Entrada) |
 
-Todos usan la contraseña indicada en `--password`, que no se guarda en ningún sitio: entrégala al tribunal por separado. Los datos son relativos al día en que se generan, así que conviene **regenerarlos la víspera de la defensa** con `--reset`. El conductor no tiene check-in de ese día, para hacerlo en directo.
+Todos usan la contraseña indicada en `--password`, que no se guarda en ningún sitio: entrégala al tribunal por separado. Los datos son relativos al día en que se generan, así que conviene **regenerarlos la víspera de la defensa** con `--reset`. El conductor no tiene check-in de ese día, para hacerlo en directo; tiene un módulo completado, otro a medias (Conducción nocturna segura) y el catálogo por explorar. La pestaña **Recomendaciones** del gerente muestra sugerencias por siniestros, quejas, acogida y la alerta del equipo Nocturno.
+
+Si el comando responde «Los datos de demostración ya existen», ya se cargaron antes: añade `--reset` para regenerarlos con la contraseña nueva.
 
 ## 13. Verificación
 
@@ -433,14 +461,18 @@ curl -s https://api.pymehub.hermantorres.com/install -o /dev/null -w "%{http_cod
 curl -s https://api.pymehub.hermantorres.com/config/config.php -o /dev/null -w "%{http_code}\n"   # 404
 ```
 
-**Prueba de humo.** `tests/smoke_test.sh` hace 20 comprobaciones (sesión, CSRF, perfiles, aislamiento entre empresas, CORS, bloqueo por fuerza bruta). **Crea dos empresas y tres usuarios de prueba**, así que ejecútala en un entorno de pruebas, o en producción solo antes de cargar datos reales y borrando después lo creado:
+**Prueba de humo.** `tests/smoke_test.sh` hace 113 comprobaciones (sesión, CSRF, perfiles, aislamiento entre empresas, organización, bienestar, formación, CORS, bloqueo por fuerza bruta). Si no puede iniciar sesión como administrador se detiene y lo dice, en lugar de dar decenas de fallos. **Crea dos empresas y varios usuarios de prueba**, así que ejecútala en un entorno de pruebas, o en producción solo antes de cargar datos reales y borrando después lo creado:
 
 ```bash
 cd /var/www/hermantorres/eude/pymehub/pymehub_api
-tests/smoke_test.sh https://api.pymehub.hermantorres.com https://pymehub.hermantorres.com TU_EMAIL_ADMIN 'TU_CONTRASEÑA'
+bash tests/smoke_test.sh https://api.pymehub.hermantorres.com https://pymehub.hermantorres.com TU_EMAIL_ADMIN 'TU_CONTRASEÑA'
 ```
 
-Resultado esperado: `20 correctas, 0 fallidas`.
+Resultado esperado: `113 correctas, 0 fallidas`.
+
+**Web.** `curl -s -o /dev/null -w '%{http_code}\n' https://pymehub.hermantorres.com/` y `…/js/config.js` deben dar **200**. Un 403 en la raíz y 404 en `config.js` indican que el `DocumentRoot` del vhost no termina en `/public` (apartado 10.2; revisa también el `-le-ssl.conf`).
+
+**Consola del navegador.** Con sesión iniciada no debe haber errores. Sin sesión, la web no consulta la API en el sitio público ni en el acceso (desde la v0.4.0).
 
 Comprobaciones externas: [securityheaders.com](https://securityheaders.com) y [SSL Labs](https://www.ssllabs.com/ssltest/) sobre ambos subdominios; objetivo, nota **A** (criterio 12).
 
@@ -448,18 +480,26 @@ Comprobaciones externas: [securityheaders.com](https://securityheaders.com) y [S
 
 ## 14. Copias de seguridad
 
-El script `cli/backup.sh` vuelca la base de datos y las subidas en `storage/backups/`, conserva 14 copias y deja la marca que lee `/v1/health`.
+El script `cli/backup.sh` vuelca la base de datos y las subidas en `storage/backups/`, conserva 14 copias y deja la marca que lee `/v1/health` (`storage/backups/ultima_copia.txt`).
+
+Las tareas programadas van en un archivo del sistema, `/etc/cron.d/pymehub`, que no depende del `crontab` de ningún usuario. Debian 13 mínimo no trae `cron`: si `crontab` da *command not found*, instálalo primero.
 
 ```bash
-sudo -u www-data crontab -e
-```
+sudo apt install -y cron && sudo systemctl enable --now cron
 
-```cron
-0 2 * * * /var/www/hermantorres/eude/pymehub/pymehub_api/cli/backup.sh >> /var/www/hermantorres/eude/pymehub/pymehub_api/storage/logs/backup.log 2>&1
+sudo tee /etc/cron.d/pymehub > /dev/null <<'CRON'
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+API=/var/www/hermantorres/eude/pymehub/pymehub_api
+# Copia diaria de la base de datos (RNF-064)
+0 2 * * *  www-data  bash $API/cli/backup.sh >> $API/storage/logs/backup.log 2>&1
 # Retención de datos: check-ins de más de 12 meses (LEG-008) e invitaciones caducadas
-0 4 * * * php /var/www/hermantorres/eude/pymehub/pymehub_api/cli/purge_retention.php >> /var/www/hermantorres/eude/pymehub/pymehub_api/storage/logs/cron.log 2>&1
+0 4 * * *  www-data  php $API/cli/purge_retention.php >> $API/storage/logs/cron.log 2>&1
 # Alertas de bienestar de equipo, los lunes con la semana anterior completa (RF-054)
-0 6 * * 1 php /var/www/hermantorres/eude/pymehub/pymehub_api/cli/wellbeing_alerts.php >> /var/www/hermantorres/eude/pymehub/pymehub_api/storage/logs/cron.log 2>&1
+0 6 * * 1  www-data  php $API/cli/wellbeing_alerts.php >> $API/storage/logs/cron.log 2>&1
+CRON
+sudo chmod 644 /etc/cron.d/pymehub
+systemctl is-active cron && cat /etc/cron.d/pymehub
 ```
 
 Las tareas programadas usan la zona horaria del servidor. Si el VPS está en UTC, `0 6 * * 1` son las 08:00 en verano y las 07:00 en invierno en España; es indiferente para el cálculo, que siempre usa semanas en hora de España.
@@ -467,7 +507,8 @@ Las tareas programadas usan la zona horaria del servidor. Si el VPS está en UTC
 **Prueba la copia y la restauración antes de la defensa** (`RNF-064`):
 
 ```bash
-sudo -u www-data /var/www/hermantorres/eude/pymehub/pymehub_api/cli/backup.sh
+sudo -u www-data bash /var/www/hermantorres/eude/pymehub/pymehub_api/cli/backup.sh   # "Copia completada con mariadb-dump: …"
+curl -s https://api.pymehub.hermantorres.com/v1/health                                 # "copia_seguridad":"ok"
 sudo mariadb -e "CREATE DATABASE pymehub_restore CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci"
 zcat "$(ls -1t /var/www/hermantorres/eude/pymehub/pymehub_api/storage/backups/db-*.sql.gz | head -1)" | sudo mariadb pymehub_restore
 sudo mariadb -e "SELECT COUNT(*) FROM pymehub_restore.usuario; DROP DATABASE pymehub_restore;"
@@ -504,7 +545,7 @@ Orden obligatorio: **primero la API, después la web** (`RNF-067`).
 
 ```bash
 # 1. Copia previa
-sudo -u www-data /var/www/hermantorres/eude/pymehub/pymehub_api/cli/backup.sh
+sudo -u www-data bash /var/www/hermantorres/eude/pymehub/pymehub_api/cli/backup.sh
 
 # 2. Mantenimiento (la API responde PH-SYS-003 salvo /v1/health)
 sudo -u www-data touch /var/www/hermantorres/eude/pymehub/pymehub_api/storage/maintenance.flag
@@ -513,7 +554,7 @@ sudo -u www-data touch /var/www/hermantorres/eude/pymehub/pymehub_api/storage/ma
 cd /var/www/hermantorres/eude/pymehub/pymehub_api
 sudo -u pymehub git fetch --tags
 sudo -u pymehub git checkout vX.Y.Z
-sudo -u www-data php cli/migrate.php
+sudo -u www-data php cli/migrate.php      # aplica migraciones y sincroniza el catálogo de formación
 
 # 4. Fin del mantenimiento y comprobación
 sudo rm /var/www/hermantorres/eude/pymehub/pymehub_api/storage/maintenance.flag
@@ -546,8 +587,17 @@ cd /var/www/hermantorres/eude/pymehub/pymehub_api && sudo -u pymehub git checkou
 | La web no mantiene la sesión | Cookie bloqueada | Comprueba HTTPS en ambos dominios, `cookie_secure` a `true` y que la URL del frontend en `config.php` coincide exactamente (sin barra final) |
 | Error de CORS en la consola del navegador | El origen de la web no está en `cors.allowed_origins` | Corrige `config/config.php` |
 | `PH-SYS-002` en todas las peticiones | Base de datos caída o credenciales cambiadas | `systemctl status mariadb` (o `mysql`) y revisa `config.php` |
-| `/v1/health` en `degradado` con `copia_seguridad: antigua` | El cron de copias no se ejecuta | Revisa `crontab -l` del usuario `www-data` y `storage/logs/backup.log` |
+| `/v1/health` con `copia_seguridad: sin_datos` o `antigua` | Nunca se ha hecho una copia o el cron no se ejecuta | Ejecuta la copia a mano (apartado 14), revisa `/etc/cron.d/pymehub` y `storage/logs/backup.log` |
 | `PH-AUTH-004` al iniciar sesión | 5 intentos fallidos en 15 minutos | Esperar 15 minutos |
+| La prueba de humo da 12 correctas y 75 fallidas (o se detiene sin poder iniciar sesión) | Se ha usado el texto de ejemplo en vez de la contraseña real | Repite con la contraseña del instalador; si salta `PH-AUTH-004`, espera 15 minutos |
+| `sudo mariadb` da *Access denied for user 'root'@'localhost'* | root tiene contraseña | `mariadb -u root -p` |
+| `/install`: «Requisito no cumplido: Extensión intl» | Falta `php8.4-intl` | `sudo apt install php8.4-intl && sudo systemctl reload apache2` |
+| `sudo -u www-data …/cli/backup.sh`: *command not found* o *Permission denied* | El script perdió el permiso de ejecución o www-data no puede leerlo | `sudo chown pymehub:www-data cli/backup.sh && sudo chmod 750 cli/backup.sh` y lánzalo con `bash` delante |
+| `crontab: command not found` | Debian mínimo sin `cron` | `sudo apt install -y cron` y usa `/etc/cron.d/pymehub` (apartado 14) |
+| La web da 403 y `js/config.js` 404 | `DocumentRoot` sin `/public` (en el vhost del 80 o en el `-le-ssl.conf`) | Apartado 10.2 |
+| `https://hermantorres.com/eude/pymehub/…/.git/HEAD` da 200 | El bloqueo del apartado 10.5 falta en el vhost HTTPS | Añádelo al `*-le-ssl.conf` de `hermantorres.com` |
+| La consola muestra `GET …/v1/auth/me 401` al abrir la web | Versión de la web anterior a la 0.4.0: comprueba la sesión aunque no haya ninguna | Es inofensivo; desaparece al actualizar a la 0.4.0 |
+| El catálogo de formación está vacío | No se ha ejecutado la sincronización tras actualizar | `sudo -u www-data php cli/catalog_sync.php` |
 
 ---
 
@@ -561,7 +611,9 @@ cd /var/www/hermantorres/eude/pymehub/pymehub_api && sudo -u pymehub git checkou
 - [ ] HTTPS en ambos subdominios, con redirección desde HTTP.
 - [ ] Asistente completado, `/install` devuelve 404, `config.php` con permisos 640 y copia fuera del servidor.
 - [ ] `/v1/health` en `ok`.
-- [ ] Prueba de humo con 87 correctas (`tests/smoke_test.sh`).
-- [ ] Cron de copias activo y restauración probada.
+- [ ] Prueba de humo con 113 correctas (`tests/smoke_test.sh`).
+- [ ] La web responde 200 en `/` y en `js/config.js`, sin errores en la consola.
+- [ ] `/etc/cron.d/pymehub` activo, primera copia hecha (`copia_seguridad: ok`) y restauración probada.
+- [ ] Catálogo de formación con 15 módulos (`php cli/catalog_sync.php`).
 - [ ] Monitor externo configurado.
 - [ ] Notas A en securityheaders.com y SSL Labs.

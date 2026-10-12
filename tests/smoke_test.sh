@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prueba de humo de Pyme Hub API (fases 0-4).
+# Prueba de humo de Pyme Hub API (fases 0-5).
 # Uso: tests/smoke_test.sh <URL_API> <ORIGEN_FRONTEND> <EMAIL_ADMIN> <PASSWORD_ADMIN>
 # Crea dos empresas de prueba con NIF y emails aleatorios. No usar en producción con datos reales.
 set -uo pipefail
@@ -20,6 +20,12 @@ check "health ok" "$(curl -s "$B/v1/health" | jq_ "d['data']['estado']")" "ok"
 echo "== Administrador"
 curl -s -c "$T/a" -H "$J" "$B/v1/auth/login" -d "{\"email\":\"$AE\",\"password\":\"$AP\"}" > "$T/a.json"
 check "login admin" "$(jq_ "d['data']['usuario']['perfil']" < "$T/a.json")" "ADMIN"
+if [ "$(jq_ "d['data']['usuario']['perfil']" < "$T/a.json")" != "ADMIN" ]; then
+  echo
+  echo "No se ha podido iniciar sesión como administrador ($(code < "$T/a.json")). Revisa el email y la contraseña:"
+  echo "usa la del instalador, no el texto de ejemplo. Tras 5 intentos fallidos, espera 15 minutos."
+  exit 1
+fi
 CA=$(jq_ "d['data']['csrf_token']" < "$T/a.json")
 check "sin CSRF -> PH-AUTH-003" "$(curl -s -b "$T/a" -H "$J" "$B/v1/admin/tenants" -d '{}' | code)" "PH-AUTH-003"
 check "validación -> PH-VAL-001" "$(curl -s -b "$T/a" -H "$J" -H "X-CSRF-Token: $CA" "$B/v1/admin/tenants" -d '{"nombre":"X","nif":"mal","plan":"PRO","ciclo_cobro":"MENSUAL","extra":1,"gerente":{"nombre":"Ana","email":"a@b.es"}}' | code)" "PH-VAL-001"
@@ -159,6 +165,39 @@ check "equipo de otra empresa -> PH-TENANT-001" "$(curl -s -b "$T/t" "$B/v1/well
 check "alertas de la empresa" "$(curl -s -b "$T/h" "$B/v1/alerts" | jq_ "d['meta']['total']")" "0"
 check "gestionar alerta inexistente -> PH-TENANT-001" "$(send h PATCH "$CH" /v1/alerts/999999 '{"estado":"GESTIONADA"}' | code)" "PH-TENANT-001"
 check "empleado no ve alertas -> PH-PERM-001" "$(curl -s -b "$T/e" "$B/v1/alerts" | code)" "PH-PERM-001"
+
+echo "== Formación (fase 5)"
+check "catálogo global para la gestión (RF-040)" "$(curl -s -b "$T/h" "$B/v1/training/modules" | jq_ "d['meta']['total'] >= 15 and all(not m['propio'] for m in d['data'])")" "True"
+check "catálogo publicado para el empleado" "$(curl -s -b "$T/e" "$B/v1/me/training/catalog" | jq_ "d['meta']['total'] >= 15")" "True"
+check "empleado no gestiona formación -> PH-PERM-001" "$(curl -s -b "$T/e" "$B/v1/training/modules" | code)" "PH-PERM-001"
+MG=$(curl -s -b "$T/h" "$B/v1/training/modules?category=CONDUCCION" | jq_ "d['data'][0]['id']")
+check "editar un módulo global -> PH-PERM-001" "$(send g PATCH "$CG" "/v1/training/modules/$MG" '{"titulo":"Cambiado"}' | code)" "PH-PERM-001"
+check "módulo propio con una pregunta -> PH-VAL-001" "$(send g POST "$CG" /v1/training/modules '{"titulo":"Mal","resumen":"Módulo de prueba incompleto","categoria":"ALMACEN","duracion_min":3,"contenido":{"objetivos":["X"],"bloques":[{"tipo":"consejo","texto":"Y"}]},"preguntas":[{"enunciado":"¿Z?","opciones":["a","b"],"correcta":0}]}' | code)" "PH-VAL-001"
+send h POST "$CH" /v1/training/modules '{"titulo":"Normas del muelle","resumen":"Horarios y normas del muelle de carga","categoria":"ALMACEN","duracion_min":3,"puestos_destino":["CONDUCTOR"],"etiquetas":["acogida"],"contenido":{"objetivos":["Conocer el muelle"],"bloques":[{"tipo":"texto","titulo":"Horario","texto":"De 6 a 8."},{"tipo":"imagen","ilustracion":"ALMACEN","alt":"Muelle"}]},"preguntas":[{"enunciado":"¿Hora de apertura?","opciones":["6","9"],"correcta":0},{"enunciado":"¿Chaleco?","opciones":["No","Sí"],"correcta":1}]}' > "$T/mp.json"
+check "RRHH crea un módulo propio en borrador (RF-046)" "$(jq_ "d['data']['estado']+' '+str(d['data']['propio'])" < "$T/mp.json")" "BORRADOR True"
+MP=$(jq_ "d['data']['id']" < "$T/mp.json")
+check "el borrador no está en el catálogo del empleado" "$(curl -s -b "$T/e" "$B/v1/me/training/catalog" | jq_ "any(m['id']==$MP for m in d['data'])")" "False"
+check "publicar el módulo propio" "$(send h POST "$CH" "/v1/training/modules/$MP/publish" '{}' | jq_ "d['data']['estado']")" "PUBLICADO"
+check "otra empresa no ve el módulo propio -> PH-TENANT-001" "$(curl -s -b "$T/t" "$B/v1/training/modules/$MP" | code)" "PH-TENANT-001"
+check "otra empresa no puede asignarlo -> PH-TENANT-001" "$(send t POST "$CT" /v1/training/assignments "{\"modulo_id\":$MP,\"usuario_ids\":[$E2]}" | code)" "PH-TENANT-001"
+check "asignar a un empleado de otra empresa -> PH-TENANT-001" "$(send t POST "$CT" /v1/training/assignments "{\"modulo_id\":$MG,\"usuario_ids\":[$EID]}" | code)" "PH-TENANT-001"
+check "fecha límite pasada -> PH-VAL-001" "$(send h POST "$CH" /v1/training/assignments "{\"modulo_id\":$MP,\"usuario_ids\":[$EID],\"fecha_limite\":\"2020-01-01\"}" | code)" "PH-VAL-001"
+check "asignar al equipo con fecha límite (RF-042)" "$(send h POST "$CH" /v1/training/assignments "{\"modulo_id\":$MP,\"equipo_id\":$EQN,\"fecha_limite\":\"2099-12-31\"}" | jq_ "d['data']['creadas'] >= 1")" "True"
+curl -s -b "$T/e" "$B/v1/me/training" > "$T/mt.json"
+check "el empleado ve su formación asignada" "$(jq_ "[a['origen'] for a in d['data'] if a['modulo']['id']==$MP][0]" < "$T/mt.json")" "GESTION"
+AS=$(jq_ "[a['id'] for a in d['data'] if a['modulo']['id']==$MP][0]" < "$T/mt.json")
+check "el reproductor no envía las soluciones" "$(curl -s -b "$T/e" "$B/v1/me/training/$AS" | jq_ "len(d['data']['modulo']['preguntas'])==2 and all('correcta' not in p for p in d['data']['modulo']['preguntas'])")" "True"
+check "avance: en curso y nunca 100 sin aprobar" "$(send e POST "$CE" "/v1/me/training/$AS/progress" '{"bloque":2,"progreso_pct":100}' | jq_ "d['data']['estado']+' '+str(d['data']['progreso_pct'])")" "EN_CURSO 90"
+check "suspenso con 50 % (RF-044)" "$(send e POST "$CE" "/v1/me/training/$AS/submit" '{"respuestas":[1,1],"envio_id":"smoke-envio-0001"}' | jq_ "str(d['data']['resultado']['aprobado'])+' '+str(d['data']['resultado']['nota'])")" "False 50"
+check "reenvío desde la cola: no suma intento" "$(send e POST "$CE" "/v1/me/training/$AS/submit" '{"respuestas":[1,1],"envio_id":"smoke-envio-0001"}' | jq_ "str(d['data']['repetido'])+' '+str(d['data']['asignacion']['intentos'])")" "True 1"
+check "respuestas incompletas -> PH-VAL-001" "$(send e POST "$CE" "/v1/me/training/$AS/submit" '{"respuestas":[0]}' | code)" "PH-VAL-001"
+check "aprobado: completada con la mejor nota" "$(send e POST "$CE" "/v1/me/training/$AS/submit" '{"respuestas":[0,1],"envio_id":"smoke-envio-0002"}' | jq_ "d['data']['asignacion']['estado']+' '+str(d['data']['asignacion']['mejor_nota'])+' '+str(d['data']['asignacion']['intentos'])")" "COMPLETADA 100 2"
+check "autoinscripción sin fecha límite (RF-047)" "$(send e POST "$CE" /v1/me/training/enroll "{\"modulo_id\":$MG}" | jq_ "d['data']['origen']+' '+str(d['data']['fecha_limite'])")" "AUTOINSCRIPCION None"
+check "inscribirse dos veces -> PH-TRN-002" "$(send e POST "$CE" /v1/me/training/enroll "{\"modulo_id\":$MG}" | code)" "PH-TRN-002"
+check "asignación que no es suya -> PH-TRN-001" "$(curl -s -b "$T/e" "$B/v1/me/training/999999" | code)" "PH-TRN-001"
+check "recomendaciones por reglas (RF-043)" "$(curl -s -b "$T/h" "$B/v1/training/recommendations?employee_id=$EID" | jq_ "'ok' if 'por_regla' in d['meta'] else ''")" "ok"
+check "seguimiento de la gestión" "$(curl -s -b "$T/h" "$B/v1/training/assignments?modulo_id=$MP&estado=COMPLETADA" | jq_ "d['meta']['total']")" "1"
+check "resumen de formación" "$(curl -s -b "$T/g" "$B/v1/training/summary" | jq_ "d['data']['completadas']")" "1"
 
 echo "== Baja laboral"
 check "motivo no válido -> PH-VAL-001" "$(send h DELETE "$CH" "/v1/employees/$EID" "{\"fecha_baja\":\"$HOY\",\"motivo_baja\":\"DESPIDO\"}" | code)" "PH-VAL-001"

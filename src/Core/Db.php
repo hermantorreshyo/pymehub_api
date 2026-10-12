@@ -6,7 +6,7 @@ namespace PymeHub\Core;
 use PDO;
 
 /**
- * Conexión PDO a MySQL 8.4 con sentencias preparadas reales y modo SQL estricto.
+ * Conexión PDO a MariaDB 11.8 o MySQL 8.4 con sentencias preparadas reales y modo SQL estricto.
  */
 final class Db
 {
@@ -29,6 +29,12 @@ final class Db
         $pdo->exec("SET SESSION sql_mode = 'STRICT_TRANS_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'");
         $pdo->exec("SET time_zone = '+00:00'");
         return $pdo;
+    }
+
+    /** Usa una conexión ya abierta (el instalador, antes de que exista config.php). */
+    public static function usar(PDO $pdo): void
+    {
+        self::$pdo = $pdo;
     }
 
     public static function pdo(): PDO

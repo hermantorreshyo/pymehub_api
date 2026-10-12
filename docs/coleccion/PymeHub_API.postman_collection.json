@@ -1079,7 +1079,591 @@
       ]
     },
     {
-      "name": "10 · Invitaciones (sin sesión)",
+      "name": "10 · Formación (GERENTE, RRHH)",
+      "item": [
+        {
+          "name": "Resumen de formación",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/training/summary",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "training",
+                "summary"
+              ]
+            },
+            "description": "Indicadores de la empresa: asignadas, completadas, vencidas, nota media, por módulo y por equipo."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Catálogo de la empresa",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/training/modules?category=CONDUCCION",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "training",
+                "modules"
+              ],
+              "query": [
+                {
+                  "key": "category",
+                  "value": "CONDUCCION"
+                }
+              ]
+            },
+            "description": "RF-040. Catálogo global publicado y módulos propios, con su uso en la empresa."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "try { pm.collectionVariables.set('modulo_id', j.data[0].id); } catch (e) {}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Detalle de un módulo",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/training/modules/{{modulo_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "training",
+                "modules",
+                "{{modulo_id}}"
+              ]
+            },
+            "description": "Con el cuestionario y su solución (solo gestión)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Crear módulo propio",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/training/modules",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "training",
+                "modules"
+              ]
+            },
+            "description": "RF-046. Se crea en borrador. 1–8 bloques (texto, lista, consejo, imagen) y 2–4 preguntas.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"Normas del centro de distribución\",\n  \"resumen\": \"Horarios de muelle y normas básicas del centro.\",\n  \"categoria\": \"ALMACEN\",\n  \"nivel\": \"BASICO\",\n  \"duracion_min\": 3,\n  \"puestos_destino\": [\n    \"CONDUCTOR\",\n    \"MOZO_ALMACEN\"\n  ],\n  \"etiquetas\": [\n    \"acogida\",\n    \"almacén\"\n  ],\n  \"contenido\": {\n    \"objetivos\": [\n      \"Conocer los horarios del muelle\"\n    ],\n    \"bloques\": [\n      {\n        \"tipo\": \"imagen\",\n        \"ilustracion\": \"ALMACEN\",\n        \"alt\": \"Muelles de carga\"\n      },\n      {\n        \"tipo\": \"texto\",\n        \"titulo\": \"Horarios\",\n        \"texto\": \"La carga de mañana es de 6:00 a 7:30.\"\n      },\n      {\n        \"tipo\": \"consejo\",\n        \"texto\": \"Usa siempre el chaleco en la zona de muelles.\"\n      }\n    ]\n  },\n  \"preguntas\": [\n    {\n      \"enunciado\": \"¿A qué hora empieza la carga de mañana?\",\n      \"opciones\": [\n        \"6:00\",\n        \"9:00\"\n      ],\n      \"correcta\": 0\n    },\n    {\n      \"enunciado\": \"¿Qué llevas en la zona de muelles?\",\n      \"opciones\": [\n        \"Gorra\",\n        \"Chaleco reflectante\"\n      ],\n      \"correcta\": 1\n    }\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "try { pm.collectionVariables.set('modulo_propio_id', j.data.id); } catch (e) {}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Editar módulo propio",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/training/modules/{{modulo_propio_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "training",
+                "modules",
+                "{{modulo_propio_id}}"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resumen\": \"Horarios de muelle, zonas y normas básicas del centro.\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Publicar módulo propio",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/training/modules/{{modulo_propio_id}}/publish",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "training",
+                "modules",
+                "{{modulo_propio_id}}",
+                "publish"
+              ]
+            },
+            "description": "Pasa al catálogo de la empresa."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Asignar a un equipo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/training/assignments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "training",
+                "assignments"
+              ]
+            },
+            "description": "RF-042. También admite usuario_ids: [..]. Fecha límite no anterior a hoy.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"modulo_id\": \"{{modulo_propio_id}}\",\n  \"equipo_id\": \"{{equipo_id}}\",\n  \"fecha_limite\": \"2099-12-31\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Asignado', () => pm.expect([200,201]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Seguimiento",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/training/assignments?estado=VENCIDA&per_page=25",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "training",
+                "assignments"
+              ],
+              "query": [
+                {
+                  "key": "estado",
+                  "value": "VENCIDA"
+                },
+                {
+                  "key": "per_page",
+                  "value": "25"
+                }
+              ]
+            },
+            "description": "Filtros: modulo_id, equipo_id, employee_id, estado, origen, q."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Recomendaciones por reglas",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/training/recommendations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "training",
+                "recommendations"
+              ]
+            },
+            "description": "RF-043: siniestro, queja, alerta de bienestar del equipo y acogida, con su motivo."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "11 · Formación del empleado (EMPLEADO)",
+      "item": [
+        {
+          "name": "Mi formación",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/me/training",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "me",
+                "training"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "try { pm.collectionVariables.set('asignacion_id', j.data.find(a => a.estado !== 'COMPLETADA').id); } catch (e) {}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Catálogo",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/me/training/catalog?category=BIENESTAR",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "me",
+                "training",
+                "catalog"
+              ],
+              "query": [
+                {
+                  "key": "category",
+                  "value": "BIENESTAR"
+                }
+              ]
+            },
+            "description": "Módulos publicados, con mi situación en cada uno."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "try { pm.collectionVariables.set('modulo_libre_id', j.data.find(m => !m.asignacion).id); } catch (e) {}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Autoinscribirme",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/me/training/enroll",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "me",
+                "training",
+                "enroll"
+              ]
+            },
+            "description": "RF-047. Sin fecha límite. Repetirlo da PH-TRN-002.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"modulo_id\": \"{{modulo_libre_id}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Inscrito o ya inscrito', () => pm.expect([201,409]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cursar el módulo",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/me/training/{{asignacion_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "me",
+                "training",
+                "{{asignacion_id}}"
+              ]
+            },
+            "description": "Contenido y preguntas sin solución."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Guardar avance",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/me/training/{{asignacion_id}}/progress",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "me",
+                "training",
+                "{{asignacion_id}}",
+                "progress"
+              ]
+            },
+            "description": "Monótono e idempotente (cola sin conexión).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bloque\": 2,\n  \"progreso_pct\": 60\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Enviar cuestionario",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/me/training/{{asignacion_id}}/submit",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "me",
+                "training",
+                "{{asignacion_id}}",
+                "submit"
+              ]
+            },
+            "description": "RF-044: aprobado con ≥ 70 %. El mismo envio_id no suma intento.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"respuestas\": [\n    0,\n    0,\n    0\n  ],\n  \"envio_id\": \"{{$guid}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Corregido o número de respuestas distinto', () => pm.expect([200,422]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "12 · Invitaciones (sin sesión)",
       "item": [
         {
           "name": "Aceptar invitación",
@@ -1118,7 +1702,7 @@
       ]
     },
     {
-      "name": "11 · Cerrar sesión",
+      "name": "13 · Cerrar sesión",
       "item": [
         {
           "name": "Logout",
@@ -1186,6 +1770,22 @@
     },
     {
       "key": "alerta_id",
+      "value": ""
+    },
+    {
+      "key": "modulo_id",
+      "value": ""
+    },
+    {
+      "key": "modulo_propio_id",
+      "value": ""
+    },
+    {
+      "key": "asignacion_id",
+      "value": ""
+    },
+    {
+      "key": "modulo_libre_id",
       "value": ""
     }
   ]

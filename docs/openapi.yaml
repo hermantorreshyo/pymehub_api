@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Pyme Hub API
-  version: 0.3.0
+  version: 0.4.0
   description: |
     Contrato entre pymehub_api y pymehub_web (DEC-13).
     Autenticación por cookie de sesión HttpOnly. Toda petición que modifica datos
@@ -282,6 +282,120 @@ components:
             por: { type: [string, 'null'] }
             en: { type: string, format: date-time }
             nota: { type: [string, 'null'] }
+    Categoria: { type: string, enum: [CONDUCCION, ALMACEN, CLIENTE, BIENESTAR, DESARROLLO] }
+    Nivel: { type: string, enum: [BASICO, INTERMEDIO, AVANZADO] }
+    Bloque:
+      description: 'Bloque de un micro-módulo (RF-041). Las ilustraciones son composiciones de marca locales por categoría.'
+      oneOf:
+        - { type: object, required: [tipo, titulo, texto], properties: { tipo: { const: texto }, titulo: { type: string, maxLength: 80 }, texto: { type: string, maxLength: 1200 } } }
+        - { type: object, required: [tipo, titulo, items], properties: { tipo: { const: lista }, titulo: { type: string, maxLength: 80 }, items: { type: array, minItems: 1, maxItems: 8, items: { type: string, maxLength: 200 } } } }
+        - { type: object, required: [tipo, texto], properties: { tipo: { const: consejo }, texto: { type: string, maxLength: 300 } } }
+        - { type: object, required: [tipo, ilustracion, alt], properties: { tipo: { const: imagen }, ilustracion: { $ref: '#/components/schemas/Categoria' }, alt: { type: string, maxLength: 150 } } }
+    Modulo:
+      type: object
+      properties:
+        id: { type: integer }
+        codigo: { type: string }
+        titulo: { type: string }
+        resumen: { type: string }
+        categoria: { $ref: '#/components/schemas/Categoria' }
+        nivel: { $ref: '#/components/schemas/Nivel' }
+        puestos_destino: { type: array, items: { type: string } }
+        etiquetas: { type: array, items: { type: string } }
+        duracion_min: { type: integer, minimum: 1, maximum: 15 }
+        estado: { type: string, enum: [BORRADOR, PUBLICADO, ARCHIVADO] }
+        version: { type: integer }
+        propio: { type: boolean, description: 'true = módulo de la empresa (RF-046); false = catálogo global' }
+        bloques: { type: integer, description: Número de bloques }
+    ModuloDetalle:
+      allOf:
+        - { $ref: '#/components/schemas/Modulo' }
+        - type: object
+          properties:
+            contenido:
+              type: object
+              properties:
+                objetivos: { type: array, items: { type: string } }
+                bloques: { type: array, items: { $ref: '#/components/schemas/Bloque' } }
+            preguntas:
+              type: array
+              items:
+                type: object
+                properties:
+                  id: { type: integer }
+                  orden: { type: integer }
+                  enunciado: { type: string }
+                  opciones: { type: array, items: { type: string } }
+                  correcta: { type: integer, description: 'Solo en la vista de gestión; nunca en /v1/me/training/{id}' }
+    ModuloEntrada:
+      type: object
+      required: [titulo, resumen, categoria, duracion_min, contenido, preguntas]
+      properties:
+        titulo: { type: string, minLength: 3, maxLength: 150 }
+        resumen: { type: string, minLength: 10, maxLength: 300 }
+        categoria: { $ref: '#/components/schemas/Categoria' }
+        nivel: { $ref: '#/components/schemas/Nivel' }
+        duracion_min: { type: integer, minimum: 1, maximum: 15 }
+        puestos_destino: { type: array, items: { type: string, enum: [CONDUCTOR, REPARTIDOR, MOZO_ALMACEN, COORDINADOR, ADMINISTRATIVO, OTRO] } }
+        etiquetas: { type: array, maxItems: 8, items: { type: string, maxLength: 30 } }
+        contenido:
+          type: object
+          required: [objetivos, bloques]
+          properties:
+            objetivos: { type: array, minItems: 1, maxItems: 5, items: { type: string, maxLength: 200 } }
+            bloques: { type: array, minItems: 1, maxItems: 8, items: { $ref: '#/components/schemas/Bloque' } }
+        preguntas:
+          type: array
+          minItems: 2
+          maxItems: 4
+          items:
+            type: object
+            required: [enunciado, opciones, correcta]
+            properties:
+              enunciado: { type: string, maxLength: 300 }
+              opciones: { type: array, minItems: 2, maxItems: 4, items: { type: string, maxLength: 150 } }
+              correcta: { type: integer, minimum: 0 }
+    Asignacion:
+      type: object
+      properties:
+        id: { type: integer }
+        origen: { type: string, enum: [GESTION, AUTOINSCRIPCION, ASESOR_IA] }
+        estado: { type: string, enum: [PENDIENTE, EN_CURSO, COMPLETADA, VENCIDA], description: 'VENCIDA = no completada con la fecha límite pasada (estado efectivo)' }
+        fecha_limite: { type: [string, 'null'], format: date, description: 'null en autoinscripciones (RF-047)' }
+        progreso_pct: { type: integer, minimum: 0, maximum: 100 }
+        bloque_actual: { type: integer }
+        intentos: { type: integer }
+        mejor_nota: { type: [integer, 'null'] }
+        ultima_nota: { type: [integer, 'null'] }
+        completada_en: { type: [string, 'null'], format: date-time }
+        asignada_en: { type: string, format: date-time }
+        modulo:
+          type: object
+          properties:
+            id: { type: integer }
+            codigo: { type: string }
+            titulo: { type: string }
+            resumen: { type: string }
+            categoria: { $ref: '#/components/schemas/Categoria' }
+            nivel: { $ref: '#/components/schemas/Nivel' }
+            duracion_min: { type: integer }
+        empleado:
+          type: object
+          description: Solo en las vistas de gestión
+          properties:
+            id: { type: integer }
+            nombre: { type: string }
+            apellidos: { type: [string, 'null'] }
+            puesto: { type: [string, 'null'] }
+            equipo_id: { type: [integer, 'null'] }
+            equipo_nombre: { type: [string, 'null'] }
+    Recomendacion:
+      type: object
+      properties:
+        empleado: { type: object, properties: { id: { type: integer }, nombre: { type: string }, apellidos: { type: string }, puesto: { type: string }, equipo_id: { type: [integer, 'null'] }, equipo_nombre: { type: [string, 'null'] } } }
+        modulo: { type: object, properties: { id: { type: integer }, codigo: { type: string }, titulo: { type: string }, categoria: { $ref: '#/components/schemas/Categoria' }, duracion_min: { type: integer } } }
+        regla: { type: string, enum: [SINIESTRO, QUEJA_CLIENTE, BIENESTAR_EQUIPO, ACOGIDA] }
+        motivo: { type: string }
 paths:
   /v1/health:
     get:
@@ -696,6 +810,283 @@ paths:
                           message: { type: string }
         '403': { description: PH-PERM-001 · PH-PLAN-001 }
         '404': { description: PH-TENANT-001 (equipo de otra empresa) }
+  /v1/training/modules:
+    get:
+      summary: Catálogo de la empresa (GERENTE, RRHH · RF-040)
+      description: Catálogo global publicado y módulos propios (sin archivados salvo que se pidan), con su uso en la empresa.
+      security: [{ sesion: [] }]
+      parameters:
+        - { name: category, in: query, schema: { $ref: '#/components/schemas/Categoria' } }
+        - { name: level, in: query, schema: { $ref: '#/components/schemas/Nivel' } }
+        - { name: status, in: query, schema: { type: string, enum: [BORRADOR, PUBLICADO, ARCHIVADO] } }
+        - { name: puesto, in: query, schema: { type: string } }
+        - { name: q, in: query, schema: { type: string, maxLength: 80 } }
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      allOf:
+                        - { $ref: '#/components/schemas/Modulo' }
+                        - { type: object, properties: { uso: { type: object, properties: { personas: { type: integer }, completadas: { type: integer } } } } }
+                  meta: { type: object, properties: { total: { type: integer } } }
+        '403': { description: PH-PERM-001 · PH-PLAN-001 }
+    post:
+      summary: Crear un módulo propio en borrador (GERENTE, RRHH · RF-046, sin IA)
+      security: [{ sesion: [], csrf: [] }]
+      requestBody: { content: { application/json: { schema: { $ref: '#/components/schemas/ModuloEntrada' } } } }
+      responses:
+        '201': { description: Creado, content: { application/json: { schema: { $ref: '#/components/schemas/ModuloDetalle' } } } }
+        '422': { description: PH-VAL-001 }
+  /v1/training/modules/{id}:
+    get:
+      summary: Detalle de un módulo con su cuestionario y la solución (GERENTE, RRHH)
+      security: [{ sesion: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses:
+        '200': { description: ok, content: { application/json: { schema: { $ref: '#/components/schemas/ModuloDetalle' } } } }
+        '404': { description: PH-TENANT-001 (módulo propio de otra empresa) }
+    patch:
+      summary: Editar un módulo propio (GERENTE, RRHH)
+      description: Campos de ModuloEntrada, todos opcionales, y `estado` (BORRADOR o ARCHIVADO). Si estaba publicado y cambia el contenido, sube la versión.
+      security: [{ sesion: [], csrf: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses:
+        '200': { description: ok, content: { application/json: { schema: { $ref: '#/components/schemas/ModuloDetalle' } } } }
+        '403': { description: PH-PERM-001 (el catálogo global no se edita) }
+        '422': { description: PH-VAL-001 }
+  /v1/training/modules/{id}/publish:
+    post:
+      summary: Publicar un módulo propio en el catálogo de la empresa (GERENTE, RRHH)
+      security: [{ sesion: [], csrf: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses:
+        '200': { description: ok, content: { application/json: { schema: { $ref: '#/components/schemas/Modulo' } } } }
+        '403': { description: PH-PERM-001 }
+        '422': { description: PH-VAL-001 (sin bloques o con menos de dos preguntas) }
+  /v1/training/assignments:
+    get:
+      summary: Seguimiento de la formación (GERENTE, RRHH)
+      description: Solo personas de alta. Orden por urgencia (vencidas, en curso, pendientes, completadas).
+      security: [{ sesion: [] }]
+      parameters:
+        - { name: modulo_id, in: query, schema: { type: integer } }
+        - { name: equipo_id, in: query, schema: { type: integer } }
+        - { name: employee_id, in: query, schema: { type: integer } }
+        - { name: estado, in: query, schema: { type: string, enum: [PENDIENTE, EN_CURSO, COMPLETADA, VENCIDA] } }
+        - { name: origen, in: query, schema: { type: string, enum: [GESTION, AUTOINSCRIPCION, ASESOR_IA] } }
+        - { name: q, in: query, schema: { type: string } }
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - { name: per_page, in: query, schema: { type: integer, default: 25, maximum: 100 } }
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Asignacion' } }
+                  meta: { $ref: '#/components/schemas/Paginacion' }
+    post:
+      summary: Asignar un módulo a personas o a un equipo (GERENTE, RRHH · RF-042)
+      description: Si la persona ya lo tenía por autoinscripción pasa a ser asignación de la empresa con la nueva fecha límite. Las completadas no se tocan.
+      security: [{ sesion: [], csrf: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [modulo_id]
+              properties:
+                modulo_id: { type: integer }
+                usuario_ids: { type: array, maxItems: 250, items: { type: integer } }
+                equipo_id: { type: integer }
+                fecha_limite: { type: string, format: date, description: No anterior a hoy }
+      responses:
+        '201':
+          description: Asignado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      creadas: { type: integer }
+                      actualizadas: { type: integer }
+                      ya_completadas: { type: integer }
+                      personas: { type: integer }
+                      modulo: { type: object, properties: { id: { type: integer }, titulo: { type: string } } }
+        '200': { description: Sin asignaciones nuevas (misma forma que 201) }
+        '404': { description: PH-TENANT-001 (persona, equipo o módulo de otra empresa) }
+        '422': { description: PH-VAL-001 }
+  /v1/training/assignments/{id}:
+    delete:
+      summary: Retirar una asignación de la empresa no completada (GERENTE, RRHH)
+      security: [{ sesion: [], csrf: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses:
+        '204': { description: Retirada }
+        '404': { description: PH-TENANT-001 }
+        '422': { description: PH-VAL-001 (autoinscripción o ya completada) }
+  /v1/training/recommendations:
+    get:
+      summary: Recomendaciones por reglas con su motivo (GERENTE, RRHH · RF-043)
+      description: |
+        Siniestro en 90 días → seguridad vial; queja de cliente → atención al cliente; equipo con alerta de bienestar
+        abierta (dato agregado) → gestión del estrés; menos de 30 días en la empresa → acogida.
+        No usa datos individuales de bienestar. Omite los módulos en los que la persona ya está.
+      security: [{ sesion: [] }]
+      parameters: [{ name: employee_id, in: query, schema: { type: integer } }]
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Recomendacion' } }
+                  meta: { type: object, properties: { total: { type: integer }, por_regla: { type: object, additionalProperties: { type: integer } } } }
+  /v1/training/summary:
+    get:
+      summary: Indicadores de formación de la empresa (GERENTE, RRHH)
+      security: [{ sesion: [] }]
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      total: { type: integer }
+                      asignadas: { type: integer }
+                      voluntarias: { type: integer }
+                      pendientes: { type: integer }
+                      en_curso: { type: integer }
+                      completadas: { type: integer }
+                      vencidas: { type: integer }
+                      tasa_finalizacion: { type: [integer, 'null'] }
+                      nota_media: { type: [integer, 'null'] }
+                      personas: { type: integer }
+                      por_modulo: { type: array, items: { type: object } }
+                      por_equipo: { type: array, items: { type: object } }
+                      recomendaciones: { type: integer }
+  /v1/me/training:
+    get:
+      summary: Mi formación (EMPLEADO)
+      security: [{ sesion: [] }]
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Asignacion' } }
+                  meta:
+                    type: object
+                    properties:
+                      hoy: { type: string, format: date }
+                      pendientes: { type: integer }
+                      en_curso: { type: integer }
+                      completadas: { type: integer }
+                      vencidas: { type: integer }
+                      minutos_completados: { type: integer }
+  /v1/me/training/catalog:
+    get:
+      summary: Catálogo publicado con mi situación en cada módulo (EMPLEADO)
+      security: [{ sesion: [] }]
+      parameters:
+        - { name: category, in: query, schema: { $ref: '#/components/schemas/Categoria' } }
+        - { name: level, in: query, schema: { $ref: '#/components/schemas/Nivel' } }
+        - { name: q, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: 'Cada módulo añade asignacion ({ id, estado, origen } o null) y para_mi_puesto'
+  /v1/me/training/enroll:
+    post:
+      summary: Autoinscripción en un módulo publicado (EMPLEADO · RF-047)
+      security: [{ sesion: [], csrf: [] }]
+      requestBody: { content: { application/json: { schema: { type: object, required: [modulo_id], properties: { modulo_id: { type: integer } } } } } }
+      responses:
+        '201': { description: Inscrito, content: { application/json: { schema: { $ref: '#/components/schemas/Asignacion' } } } }
+        '404': { description: PH-TENANT-001 }
+        '409': { description: PH-TRN-002 }
+  /v1/me/training/{id}:
+    get:
+      summary: Cursar un módulo (EMPLEADO)
+      description: Asignación con el módulo completo. Las preguntas no incluyen la solución.
+      security: [{ sesion: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer }, description: Id de la asignación }]
+      responses:
+        '200': { description: ok }
+        '409': { description: PH-TRN-001 (no es suya) }
+  /v1/me/training/{id}/progress:
+    post:
+      summary: Guardar el avance (EMPLEADO · RF-045)
+      description: Idempotente y monótono (nunca retrocede). El 100 % solo se alcanza aprobando; el avance se limita a 90.
+      security: [{ sesion: [], csrf: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody: { content: { application/json: { schema: { type: object, required: [bloque, progreso_pct], properties: { bloque: { type: integer, minimum: 0, maximum: 20 }, progreso_pct: { type: integer, minimum: 0, maximum: 100 } } } } } }
+      responses:
+        '200': { description: ok, content: { application/json: { schema: { $ref: '#/components/schemas/Asignacion' } } } }
+        '409': { description: PH-TRN-001 }
+  /v1/me/training/{id}/submit:
+    post:
+      summary: Enviar el cuestionario (EMPLEADO · RF-044)
+      description: |
+        Aprobado con ≥ 70 %, intentos ilimitados, se guarda la mejor nota. Con el mismo `envio_id`
+        (reenvío desde la cola sin conexión) no cuenta un intento nuevo y `repetido` es true.
+        La solución de cada pregunta solo se devuelve si se aprueba.
+      security: [{ sesion: [], csrf: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [respuestas]
+              properties:
+                respuestas: { type: array, items: { type: integer, minimum: 0 }, description: Índice elegido por pregunta, en orden }
+                envio_id: { type: string, minLength: 8, maxLength: 36, description: 'Identificador del envío (UUID) para la idempotencia' }
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      resultado:
+                        type: object
+                        properties:
+                          nota: { type: integer }
+                          aprobado: { type: boolean }
+                          aciertos: { type: integer }
+                          total: { type: integer }
+                          detalle: { type: array, items: { type: object, properties: { pregunta_id: { type: integer }, correcta: { type: boolean }, elegida: { type: integer }, solucion: { type: integer } } } }
+                      asignacion: { $ref: '#/components/schemas/Asignacion' }
+                      repetido: { type: boolean }
+                  meta: { type: object, properties: { aprobado_con: { type: integer, example: 70 } } }
+        '409': { description: PH-TRN-001 }
+        '422': { description: PH-VAL-001 }
   /v1/alerts:
     get:
       summary: Alertas de la empresa (GERENTE, RRHH · §8.4)
