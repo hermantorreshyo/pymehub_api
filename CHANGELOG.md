@@ -2,6 +2,23 @@
 
 Formato basado en *Keep a Changelog*; versiones SemVer.
 
+## [0.3.2] · 2026-10-12
+
+Corrige las rutas de producción. Sin cambios de comportamiento ni migraciones.
+
+### Operación
+- Rutas reales del VPS: `/var/www/hermantorres/eude/pymehub/pymehub_api` (API) y `/var/www/hermantorres/eude/pymehub/pymehub_web` (web), con DocumentRoot en su `public/`.
+- Comentarios de uso de `cli/backup.sh`, `cli/purge_retention.php` y `cli/wellbeing_alerts.php` (líneas de `crontab`) con la ruta nueva.
+
+### Seguridad
+- Manual 01, apartado 10.5 (obligatorio): como los repositorios quedan dentro de `/var/www/hermantorres`, se bloquea `/eude/pymehub` en los vhosts de `hermantorres.com`. Así no se exponen `config/`, `storage/` (copias de la base de datos) ni `.git`. Incluye la comprobación con `curl` (`RNF-004`, `SEC-010`).
+
+### Documentación
+- Manual 01:
+  - tabla de rutas al principio y aviso de no cambiar los permisos de `/var/www/hermantorres`, que es de otro sitio;
+  - clonado, vhosts, permisos, copias, tareas programadas, actualización, datos de demostración y restauración con las rutas nuevas.
+- Requisitos v0.9.1: §3.2 (DocumentRoot) y §4.1 (despliegue de cada repositorio).
+
 ## [0.3.1] · 2026-10-12
 
 Compatibilidad con **MariaDB 11.8 LTS**, el motor del VPS de producción (`DEC-05`). La API funciona sobre MariaDB ≥ 11.4.5 y MySQL ≥ 8.4.0. **Sin migraciones nuevas.**

@@ -2,7 +2,7 @@
 
 **Proyecto:** Pyme Hub — TFM EUDE Business School (The Best Team)
 **Documento:** Especificación de requerimientos técnicos del Producto Mínimo Viable (MVP)
-**Versión:** 0.9 · 12/10/2026
+**Versión:** 0.9.1 · 12/10/2026
 **Stack:** LAMP nativo, sin Docker (Linux · Apache · **MariaDB 11.8 LTS o MySQL 8.4 LTS** · PHP 8.4). Producción: MariaDB 11.8
 **Repositorios:** dos, independientes: `pymehub_api` (backend tipo API) y `pymehub_web` (frontend que consume la API)
 **Estado:** Alineado con la versión 4 del documento del TFM (carpeta *Revisión 004*). Los cambios que este documento obliga a trasladar al TFM se listan en §22.3.
@@ -20,6 +20,7 @@
 | 0.7 | 03/10/2026 | **Modelo de datos interlocutor/usuario** (§7, `DEC-14`): todos los actores en `interlocutor` (atributo `tipo`) y las personas en `usuario` (atributo `perfil`), con un interlocutor que tiene varios usuarios; tablas en español. Repositorios renombrados a `pymehub_api` y `pymehub_web` (GitHub). Aclaración de `RF-096`: en MySQL el DDL no es transaccional |
 | 0.8 | 03/10/2026 | Fase 3 (Organización): `RF-020` importación CSV de la plantilla y `RF-021` a `RF-023` (empleados, baja laboral e invitación de empleados) en §8.3; `LEG-016` referido a la columna real `interlocutor.fecha_contrato_encargado` |
 | 0.9 | 12/10/2026 | **Compatibilidad con MariaDB 11.8 LTS** (`DEC-05`): el VPS de producción ya usa MariaDB 11.8.6 con otras aplicaciones y no se puede sustituir. La API funciona sobre MySQL 8.4 y MariaDB 11.8 con el SQL común a ambos (`RNF-009`). Instalador con detección de motor y versión mínima por motor (`RF-091`), collation comprobada antes de migrar, conexión por socket, copias con `mariadb-dump` o `mysqldump` (`RNF-064`). `P-11` cerrado |
+| 0.9.1 | 12/10/2026 | Rutas reales de producción: `/var/www/hermantorres/eude/pymehub/pymehub_api` y `/var/www/hermantorres/eude/pymehub/pymehub_web` (§3.2, §4.1) |
 
 ---
 
@@ -113,8 +114,8 @@ Además, el MVP incluye el **núcleo** (multiempresa, usuarios, cuatro roles, im
 
 | Uso | Subdominio | DocumentRoot | DNS en GoDaddy |
 |---|---|---|---|
-| Frontend (PWA) | `pymehub.hermantorres.com` | `/var/www/pymehub-web/public` | Registro A → IP del VPS |
-| API | `api.pymehub.hermantorres.com` | `/var/www/pymehub-api/public` | Registro A → IP del VPS |
+| Frontend (PWA) | `pymehub.hermantorres.com` | `/var/www/hermantorres/eude/pymehub/pymehub_web/public` | Registro A → IP del VPS |
+| API | `api.pymehub.hermantorres.com` | `/var/www/hermantorres/eude/pymehub/pymehub_api/public` | Registro A → IP del VPS |
 
 Ambos comparten el dominio registrable `hermantorres.com`, por lo que la cookie `SameSite=Strict` viaja en las peticiones `fetch` con `credentials: 'include'`.
 
@@ -149,8 +150,8 @@ Ambos comparten el dominio registrable `hermantorres.com`, por lo que la cookie 
 
 | Repositorio | Contenido | Despliegue | Depende de |
 |---|---|---|---|
-| `pymehub_api` | Backend tipo API: PHP 8.4, migraciones SQL, instalador, tareas programadas, especificación OpenAPI | `/var/www/pymehub-api` → `api.pymehub.hermantorres.com` | MariaDB 11.8 o MySQL 8.4 y, opcionalmente, Mistral AI |
-| `pymehub_web` | Frontend: PWA en HTML, CSS y JavaScript nativo, sin código de servidor | `/var/www/pymehub-web` → `pymehub.hermantorres.com` | **Solo de la API**, a través de HTTPS |
+| `pymehub_api` | Backend tipo API: PHP 8.4, migraciones SQL, instalador, tareas programadas, especificación OpenAPI | `/var/www/hermantorres/eude/pymehub/pymehub_api` → `api.pymehub.hermantorres.com` | MariaDB 11.8 o MySQL 8.4 y, opcionalmente, Mistral AI |
+| `pymehub_web` | Frontend: PWA en HTML, CSS y JavaScript nativo, sin código de servidor | `/var/www/hermantorres/eude/pymehub/pymehub_web` → `pymehub.hermantorres.com` | **Solo de la API**, a través de HTTPS |
 
 - `RNF-006` (M) Cada repositorio tiene su `README.md` (instalación, configuración, despliegue), su `CHANGELOG.md`, su numeración SemVer y sus propias etiquetas de versión. Ningún repositorio contiene código del otro.
 - `RNF-007` (M) **El frontend solo consume la API**: no contiene PHP ni acceso a base de datos, y todo dato que muestra procede de la API. Puede servirse desde cualquier servidor web estático sin cambiar el backend.

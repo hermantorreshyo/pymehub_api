@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 /**
  * Alertas de bienestar de equipo (RF-054). Programar los lunes a las 06:00 (§17.2):
- *   0 6 * * 1  www-data  php /var/www/pymehub-api/cli/wellbeing_alerts.php
+ *   0 6 * * 1  www-data  php /var/www/hermantorres/eude/pymehub/pymehub_api/cli/wellbeing_alerts.php
  * Evalúa la última semana completa frente a las 4 anteriores en todas las empresas
  * activas o en piloto. Uso manual: php cli/wellbeing_alerts.php [--empresa=ID]
  */

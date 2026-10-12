@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 /**
  * Retención de datos (§17.2). Programar a diario a las 04:00:
- *   0 4 * * *  www-data  php /var/www/pymehub-api/cli/purge_retention.php
+ *   0 4 * * *  www-data  php /var/www/hermantorres/eude/pymehub/pymehub_api/cli/purge_retention.php
  * - LEG-008: borra los check-ins individuales de más de 12 meses (los agregados ya mostrados
  *   no se guardan aparte: se recalculan sobre los datos vigentes).
  * - Invitaciones caducadas hace más de 30 días.

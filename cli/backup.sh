@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Copia diaria de Pyme Hub API (RNF-064): base de datos + uploads, rotación de 14.
 # Funciona con MariaDB (mariadb-dump) y MySQL (mysqldump) (DEC-05).
-# Uso (cron del usuario del proyecto): 0 2 * * * /var/www/pymehub-api/cli/backup.sh
+# Uso (cron del usuario del proyecto): 0 2 * * * /var/www/hermantorres/eude/pymehub/pymehub_api/cli/backup.sh
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DEST="$ROOT/storage/backups"

@@ -1,9 +1,17 @@
 # Manual 01 · Despliegue de Pyme Hub
 
-**Aplica a:** `pymehub_api` 0.3.1 y `pymehub_web` 0.3.0
+**Aplica a:** `pymehub_api` 0.3.2 y `pymehub_web` 0.3.0
 **Entorno:** VPS Hostinger · Debian 13 · Apache 2.4 · PHP 8.4 · **MariaDB 11.8 LTS** (o MySQL 8.4 LTS) · sin Docker
 **Dominios:** `api.pymehub.hermantorres.com` (API) y `pymehub.hermantorres.com` (web)
-**Última revisión:** 12/10/2026 (compatibilidad con MariaDB 11.8, `DEC-05`)
+**Última revisión:** 12/10/2026 (compatibilidad con MariaDB 11.8, `DEC-05`; rutas de producción)
+**Rutas en el servidor:**
+
+| Repositorio | Ruta | DocumentRoot |
+|---|---|---|
+| `pymehub_api` | `/var/www/hermantorres/eude/pymehub/pymehub_api` | `…/pymehub_api/public` |
+| `pymehub_web` | `/var/www/hermantorres/eude/pymehub/pymehub_web` | `…/pymehub_web/public` |
+
+`/var/www/hermantorres` pertenece a otro sitio del mismo servidor: **no cambies su propietario ni sus permisos**. Aplica `chown` y `chmod` solo dentro de `…/eude/pymehub/pymehub_api` y `…/eude/pymehub/pymehub_web`.
 
 > El procedimiento concreto del VPS de producción (`srv1616185`), con su MariaDB compartido, está en el **manual 02** (`02_DESPLIEGUE_VPS_PRODUCCION.md`). Este manual es la referencia general para cualquier servidor.
 
@@ -23,8 +31,8 @@ Los comandos usan estos valores; cámbialos si los tuyos son distintos:
 
 | Variable | Valor |
 |---|---|
-| Ruta de la API | `/var/www/pymehub-api` |
-| Ruta de la web | `/var/www/pymehub-web` |
+| Ruta de la API | `/var/www/hermantorres/eude/pymehub/pymehub_api` |
+| Ruta de la web | `/var/www/hermantorres/eude/pymehub/pymehub_web` |
 | Usuario de despliegue | `pymehub` |
 | Base de datos y usuario MySQL | `pymehub` / `pymehub_user` |
 
@@ -34,8 +42,8 @@ Los comandos usan estos valores; cámbialos si los tuyos son distintos:
 
 ```mermaid
 flowchart LR
-    U[Navegador o móvil] -->|HTTPS| W[pymehub.hermantorres.com<br/>Apache · archivos estáticos<br/>/var/www/pymehub-web]
-    U -->|HTTPS · fetch con cookie| A[api.pymehub.hermantorres.com<br/>Apache · PHP 8.4<br/>/var/www/pymehub-api/public]
+    U[Navegador o móvil] -->|HTTPS| W[pymehub.hermantorres.com<br/>Apache · archivos estáticos<br/>/var/www/hermantorres/eude/pymehub/pymehub_web]
+    U -->|HTTPS · fetch con cookie| A[api.pymehub.hermantorres.com<br/>Apache · PHP 8.4<br/>/var/www/hermantorres/eude/pymehub/pymehub_api/public]
     A --> D[(MariaDB 11.8 o MySQL 8.4<br/>base pymehub)]
     A -. solo datos no personales .-> M[Mistral AI]
     C[cron] --> A
@@ -178,20 +186,22 @@ Ambos deben devolver la IP del VPS.
 sudo adduser --disabled-password --gecos "" pymehub
 sudo usermod -aG www-data pymehub
 
-# Clonar los repositorios
-sudo mkdir -p /var/www/pymehub-api /var/www/pymehub-web
-sudo chown pymehub:www-data /var/www/pymehub-api /var/www/pymehub-web
-sudo -u pymehub git clone https://github.com/hermantorreshyo/pymehub_api.git /var/www/pymehub-api
-sudo -u pymehub git clone https://github.com/hermantorreshyo/pymehub_web.git /var/www/pymehub-web
+# Clonar los repositorios (la carpeta padre puede existir ya: no cambies sus permisos)
+sudo mkdir -p /var/www/hermantorres/eude/pymehub
+sudo mkdir -p /var/www/hermantorres/eude/pymehub/pymehub_api /var/www/hermantorres/eude/pymehub/pymehub_web
+sudo chown pymehub:www-data /var/www/hermantorres/eude/pymehub/pymehub_api /var/www/hermantorres/eude/pymehub/pymehub_web
+sudo -u pymehub git clone https://github.com/hermantorreshyo/pymehub_api.git /var/www/hermantorres/eude/pymehub/pymehub_api
+sudo -u pymehub git clone https://github.com/hermantorreshyo/pymehub_web.git /var/www/hermantorres/eude/pymehub/pymehub_web
 
 # Fijar la versión que se despliega (etiqueta)
-cd /var/www/pymehub-api && sudo -u pymehub git checkout v0.1.0
+cd /var/www/hermantorres/eude/pymehub/pymehub_api && sudo -u pymehub git checkout v0.3.2
+cd /var/www/hermantorres/eude/pymehub/pymehub_web && sudo -u pymehub git checkout v0.3.0
 ```
 
 Permisos de la API: el código es de solo lectura para Apache; solo `storage/` y `config/` son escribibles.
 
 ```bash
-cd /var/www/pymehub-api
+cd /var/www/hermantorres/eude/pymehub/pymehub_api
 sudo chown -R pymehub:www-data .
 sudo find . -type d -exec chmod 750 {} \;
 sudo find . -type f -exec chmod 640 {} \;
@@ -208,12 +218,12 @@ sudo chmod 2770 storage config
 ```apache
 <VirtualHost *:80>
     ServerName api.pymehub.hermantorres.com
-    DocumentRoot /var/www/pymehub-api/public
+    DocumentRoot /var/www/hermantorres/eude/pymehub/pymehub_api/public
 
-    <Directory /var/www/pymehub-api>
+    <Directory /var/www/hermantorres/eude/pymehub/pymehub_api>
         Require all denied
     </Directory>
-    <Directory /var/www/pymehub-api/public>
+    <Directory /var/www/hermantorres/eude/pymehub/pymehub_api/public>
         AllowOverride All
         Require all granted
         Options -Indexes
@@ -240,12 +250,12 @@ sudo chmod 2770 storage config
 ```apache
 <VirtualHost *:80>
     ServerName pymehub.hermantorres.com
-    DocumentRoot /var/www/pymehub-web/public
+    DocumentRoot /var/www/hermantorres/eude/pymehub/pymehub_web/public
 
-    <Directory /var/www/pymehub-web>
+    <Directory /var/www/hermantorres/eude/pymehub/pymehub_web>
         Require all denied
     </Directory>
-    <Directory /var/www/pymehub-web/public>
+    <Directory /var/www/hermantorres/eude/pymehub/pymehub_web/public>
         AllowOverride None
         Require all granted
         Options -Indexes
@@ -310,6 +320,41 @@ sudo systemctl reload apache2
 
 ---
 
+### 10.5 Rutas dentro de otro sitio: bloquear el acceso desde `hermantorres.com` (obligatorio)
+
+Los repositorios viven dentro de `/var/www/hermantorres`. Si el sitio `hermantorres.com` usa esa carpeta (o una superior) como `DocumentRoot`, su vhost **también** sirve `…/eude/pymehub/…`. Eso dejaría accesibles desde fuera el código, `config/config.php`, `storage/` (logs y **copias de la base de datos**) y `.git`.
+
+Los `.htaccess` con `Require all denied` de `config/`, `storage/`, `src/`, `cli/`… son una segunda barrera (`RNF-004`). Pero solo funcionan si ese vhost tiene `AllowOverride All`, y no cubren `.git` ni la raíz del repositorio.
+
+1. Comprueba el `DocumentRoot` del otro sitio:
+
+   ```bash
+   grep -RhiE "ServerName|DocumentRoot" /etc/apache2/sites-enabled/ | paste - - | grep -i "hermantorres.com"
+   ```
+
+2. Si es `/var/www/hermantorres` o una carpeta superior, añade en **los vhosts de `hermantorres.com`** (puerto 80 y `-le-ssl.conf`) este bloque. Solo afecta a las URL de ese sitio, no a los subdominios de Pyme Hub:
+
+   ```apache
+   # Pyme Hub se sirve solo por sus subdominios: aquí no debe verse nada
+   <Location "/eude/pymehub">
+       Require all denied
+   </Location>
+   ```
+
+   ```bash
+   sudo apache2ctl configtest && sudo systemctl reload apache2
+   ```
+
+3. Verifica. Las cuatro peticiones deben devolver **403 o 404**:
+
+   ```bash
+   for u in eude/pymehub/pymehub_api/config/config.php eude/pymehub/pymehub_api/storage/ultima_copia.txt \
+            eude/pymehub/pymehub_api/.git/HEAD eude/pymehub/pymehub_web/.git/HEAD; do
+     echo "$(curl -s -o /dev/null -w '%{http_code}' https://hermantorres.com/$u)  $u"; done
+   ```
+
+> Es un cambio en la configuración de otro sitio: coordínalo con su responsable. No toca la configuración global de Apache (`RNF-001`) y no afecta al funcionamiento de `hermantorres.com`.
+
 ## 11. Certificados HTTPS
 
 ```bash
@@ -342,8 +387,8 @@ El asistente comprueba el servidor, rechaza MariaDB y versiones de MySQL anterio
 Después:
 
 ```bash
-sudo chmod 640 /var/www/pymehub-api/config/config.php
-sudo cp /var/www/pymehub-api/config/config.php ~/config.pymehub.$(date +%F).php   # y guárdalo fuera del servidor
+sudo chmod 640 /var/www/hermantorres/eude/pymehub/pymehub_api/config/config.php
+sudo cp /var/www/hermantorres/eude/pymehub/pymehub_api/config/config.php ~/config.pymehub.$(date +%F).php   # y guárdalo fuera del servidor
 ```
 
 `config/config.php` contiene la clave de cifrado de las notas de bienestar: si se pierde, esas notas no se pueden recuperar.
@@ -359,7 +404,7 @@ Para la defensa, la API incluye un generador de datos **ficticios** (`LEG-009`).
 También genera 60 días de check-ins, con el equipo Nocturno empeorando, y sus alertas.
 
 ```bash
-cd /var/www/pymehub-api
+cd /var/www/hermantorres/eude/pymehub/pymehub_api
 sudo -u www-data php cli/demo_seed.php --password='CONTRASEÑA-DE-LA-DEMO'          # crear
 sudo -u www-data php cli/demo_seed.php --password='CONTRASEÑA-DE-LA-DEMO' --reset  # regenerar desde cero
 sudo -u www-data php cli/demo_seed.php --borrar                                     # eliminarlos
@@ -391,7 +436,7 @@ curl -s https://api.pymehub.hermantorres.com/config/config.php -o /dev/null -w "
 **Prueba de humo.** `tests/smoke_test.sh` hace 20 comprobaciones (sesión, CSRF, perfiles, aislamiento entre empresas, CORS, bloqueo por fuerza bruta). **Crea dos empresas y tres usuarios de prueba**, así que ejecútala en un entorno de pruebas, o en producción solo antes de cargar datos reales y borrando después lo creado:
 
 ```bash
-cd /var/www/pymehub-api
+cd /var/www/hermantorres/eude/pymehub/pymehub_api
 tests/smoke_test.sh https://api.pymehub.hermantorres.com https://pymehub.hermantorres.com TU_EMAIL_ADMIN 'TU_CONTRASEÑA'
 ```
 
@@ -410,11 +455,11 @@ sudo -u www-data crontab -e
 ```
 
 ```cron
-0 2 * * * /var/www/pymehub-api/cli/backup.sh >> /var/www/pymehub-api/storage/logs/backup.log 2>&1
+0 2 * * * /var/www/hermantorres/eude/pymehub/pymehub_api/cli/backup.sh >> /var/www/hermantorres/eude/pymehub/pymehub_api/storage/logs/backup.log 2>&1
 # Retención de datos: check-ins de más de 12 meses (LEG-008) e invitaciones caducadas
-0 4 * * * php /var/www/pymehub-api/cli/purge_retention.php >> /var/www/pymehub-api/storage/logs/cron.log 2>&1
+0 4 * * * php /var/www/hermantorres/eude/pymehub/pymehub_api/cli/purge_retention.php >> /var/www/hermantorres/eude/pymehub/pymehub_api/storage/logs/cron.log 2>&1
 # Alertas de bienestar de equipo, los lunes con la semana anterior completa (RF-054)
-0 6 * * 1 php /var/www/pymehub-api/cli/wellbeing_alerts.php >> /var/www/pymehub-api/storage/logs/cron.log 2>&1
+0 6 * * 1 php /var/www/hermantorres/eude/pymehub/pymehub_api/cli/wellbeing_alerts.php >> /var/www/hermantorres/eude/pymehub/pymehub_api/storage/logs/cron.log 2>&1
 ```
 
 Las tareas programadas usan la zona horaria del servidor. Si el VPS está en UTC, `0 6 * * 1` son las 08:00 en verano y las 07:00 en invierno en España; es indiferente para el cálculo, que siempre usa semanas en hora de España.
@@ -422,9 +467,9 @@ Las tareas programadas usan la zona horaria del servidor. Si el VPS está en UTC
 **Prueba la copia y la restauración antes de la defensa** (`RNF-064`):
 
 ```bash
-sudo -u www-data /var/www/pymehub-api/cli/backup.sh
+sudo -u www-data /var/www/hermantorres/eude/pymehub/pymehub_api/cli/backup.sh
 sudo mariadb -e "CREATE DATABASE pymehub_restore CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci"
-zcat "$(ls -1t /var/www/pymehub-api/storage/backups/db-*.sql.gz | head -1)" | sudo mariadb pymehub_restore
+zcat "$(ls -1t /var/www/hermantorres/eude/pymehub/pymehub_api/storage/backups/db-*.sql.gz | head -1)" | sudo mariadb pymehub_restore
 sudo mariadb -e "SELECT COUNT(*) FROM pymehub_restore.usuario; DROP DATABASE pymehub_restore;"
 ```
 
@@ -448,7 +493,7 @@ Un segundo monitor HTTP sobre `https://pymehub.hermantorres.com` vigila la web.
 Los errores de la API quedan en `storage/logs/api-AAAA-MM-DD.log` (una línea JSON por evento, con `cid`). Cuando un usuario reporte un error, pídele el identificador que muestra el mensaje y búscalo:
 
 ```bash
-grep '"cid":"IDENTIFICADOR"' /var/www/pymehub-api/storage/logs/api-*.log
+grep '"cid":"IDENTIFICADOR"' /var/www/hermantorres/eude/pymehub/pymehub_api/storage/logs/api-*.log
 ```
 
 ---
@@ -459,31 +504,31 @@ Orden obligatorio: **primero la API, después la web** (`RNF-067`).
 
 ```bash
 # 1. Copia previa
-sudo -u www-data /var/www/pymehub-api/cli/backup.sh
+sudo -u www-data /var/www/hermantorres/eude/pymehub/pymehub_api/cli/backup.sh
 
 # 2. Mantenimiento (la API responde PH-SYS-003 salvo /v1/health)
-sudo -u www-data touch /var/www/pymehub-api/storage/maintenance.flag
+sudo -u www-data touch /var/www/hermantorres/eude/pymehub/pymehub_api/storage/maintenance.flag
 
 # 3. Código y migraciones
-cd /var/www/pymehub-api
+cd /var/www/hermantorres/eude/pymehub/pymehub_api
 sudo -u pymehub git fetch --tags
 sudo -u pymehub git checkout vX.Y.Z
 sudo -u www-data php cli/migrate.php
 
 # 4. Fin del mantenimiento y comprobación
-sudo rm /var/www/pymehub-api/storage/maintenance.flag
+sudo rm /var/www/hermantorres/eude/pymehub/pymehub_api/storage/maintenance.flag
 curl -s https://api.pymehub.hermantorres.com/v1/health
 
 # 5. Web
-cd /var/www/pymehub-web
+cd /var/www/hermantorres/eude/pymehub/pymehub_web
 sudo -u pymehub git fetch --tags && sudo -u pymehub git checkout vX.Y.Z
 ```
 
 **Si una migración falla:** en MySQL los cambios de estructura se confirman de forma implícita, así que una migración no se deshace sola. Restaura la copia del paso 1, vuelve a la etiqueta anterior y revisa el error antes de reintentar:
 
 ```bash
-zcat "$(ls -1t /var/www/pymehub-api/storage/backups/db-*.sql.gz | head -1)" | sudo mariadb pymehub
-cd /var/www/pymehub-api && sudo -u pymehub git checkout vVERSION_ANTERIOR
+zcat "$(ls -1t /var/www/hermantorres/eude/pymehub/pymehub_api/storage/backups/db-*.sql.gz | head -1)" | sudo mariadb pymehub
+cd /var/www/hermantorres/eude/pymehub/pymehub_api && sudo -u pymehub git checkout vVERSION_ANTERIOR
 ```
 
 ---
@@ -511,7 +556,8 @@ cd /var/www/pymehub-api && sudo -u pymehub git checkout vVERSION_ANTERIOR
 - [ ] Motor de base de datos verificado (apartado 4): MariaDB ≥ 11.4.5 (producción: 11.8) o MySQL ≥ 8.4.
 - [ ] Base `pymehub` y usuario `pymehub_user` con permisos solo sobre ella.
 - [ ] DNS de ambos subdominios resolviendo a la IP del VPS.
-- [ ] Vhosts activos, `configtest` correcto, otros sitios del servidor sin cambios.
+- [ ] Vhosts activos, `configtest` correcto, otros sitios del servidor sin cambios (salvo el bloqueo de `/eude/pymehub` del apartado 10.5).
+- [ ] `https://hermantorres.com/eude/pymehub/…` devuelve 403/404 para `config/`, `storage/` y `.git` (apartado 10.5).
 - [ ] HTTPS en ambos subdominios, con redirección desde HTTP.
 - [ ] Asistente completado, `/install` devuelve 404, `config.php` con permisos 640 y copia fuera del servidor.
 - [ ] `/v1/health` en `ok`.
