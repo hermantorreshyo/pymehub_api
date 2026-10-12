@@ -72,10 +72,13 @@ final class MiFormacionController
         Response::json($rows, 200, ['total' => count($rows), 'puesto' => $puesto]);
     }
 
-    /** POST /v1/me/training/enroll { modulo_id } — RF-047: autoinscripción sin fecha límite. */
+    /** POST /v1/me/training/enroll { modulo_id, solicitud_id? } — RF-047: autoinscripción sin fecha límite (origen ASESOR_IA si viene del asesor). */
     public static function enroll(Request $request): void
     {
-        $in = Validator::validate($request->json(), ['modulo_id' => 'required|int|min:1']);
+        $in = Validator::validate($request->json(), [
+            'modulo_id'    => 'required|int|min:1',
+            'solicitud_id' => 'nullable|int|min:1', // inscripción desde una recomendación del asesor (§12.2)
+        ]);
         $iid = Context::interlocutorId();
         $uid = Context::usuarioId();
         RateLimiter::hit("inscripcion:$uid", 30, 3600);
@@ -86,7 +89,14 @@ final class MiFormacionController
         if (AsignacionRepository::existente($uid, $m['id']) !== null) {
             throw new ApiException('PH-TRN-002', 'Ya estás inscrito en este módulo', 409);
         }
-        $id = AsignacionRepository::inscribir($iid, $uid, $m['id'], 'AUTOINSCRIPCION');
+        $origen = 'AUTOINSCRIPCION';
+        if (!empty($in['solicitud_id'])) {
+            if (Db::value('SELECT 1 FROM solicitud_ia WHERE id = ? AND usuario_id = ? AND interlocutor_id = ?', [(int) $in['solicitud_id'], $uid, $iid]) === null) {
+                throw ApiException::notFound();
+            }
+            $origen = 'ASESOR_IA';
+        }
+        $id = AsignacionRepository::inscribir($iid, $uid, $m['id'], $origen);
         Audit::log('formacion.autoinscripcion', 'asignacion_formativa', $id, $request->ip);
         Response::json(AsignacionRepository::propia($id, $uid, $iid), 201);
     }

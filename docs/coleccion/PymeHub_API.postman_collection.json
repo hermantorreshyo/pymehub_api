@@ -1663,7 +1663,244 @@
       ]
     },
     {
-      "name": "12 · Invitaciones (sin sesión)",
+      "name": "12 · Asesor de formación con IA",
+      "item": [
+        {
+          "name": "Mis preferencias",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/me/training/preferences",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "me",
+                "training",
+                "preferences"
+              ]
+            },
+            "description": "EMPLEADO. Preferencias (o null) y opciones disponibles."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Guardar preferencias",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/me/training/preferences",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "me",
+                "training",
+                "preferences"
+              ]
+            },
+            "description": "§12.2. El comentario pasa por el PayloadGuard (PH-AI-004 si lleva datos personales o de salud).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"objetivo\": \"SALUD_ENERGIA\",\n  \"intereses\": [\n    \"BIENESTAR\",\n    \"CONDUCCION\"\n  ],\n  \"formato\": \"TEXTO\",\n  \"minutos_semana\": 15,\n  \"comentario\": \"Quiero llegar con más energía al final del turno\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Pedir recomendaciones",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/me/training/advisor",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "me",
+                "training",
+                "advisor"
+              ]
+            },
+            "description": "3 a 5 módulos del catálogo con su motivo y plan semanal. servido_desde: live | cache | reglas; meta.aviso si el proveedor falla.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "try { pm.collectionVariables.set('solicitud_id', j.data.solicitud_id); } catch (e) {}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Valorar como útil",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/me/training/advisor/feedback",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "me",
+                "training",
+                "advisor",
+                "feedback"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"solicitud_id\": \"{{solicitud_id}}\",\n  \"util\": true\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Demanda formativa (GERENTE, RRHH)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/training/demand",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "training",
+                "demand"
+              ]
+            },
+            "description": "IA-021. Recuentos agregados con umbral de 5 personas. Ejecútala con la sesión de gerencia."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 o 403 según el perfil', () => pm.expect([200,403]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Uso de IA (ADMIN)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/ai-usage?days=30",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "ai-usage"
+              ],
+              "query": [
+                {
+                  "key": "days",
+                  "value": "30"
+                }
+              ]
+            },
+            "description": "Consultas por origen, avisos, valoraciones y empresas. Sin contenido."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 o 403 según el perfil', () => pm.expect([200,403]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "13 · Invitaciones (sin sesión)",
       "item": [
         {
           "name": "Aceptar invitación",
@@ -1702,7 +1939,7 @@
       ]
     },
     {
-      "name": "13 · Cerrar sesión",
+      "name": "14 · Cerrar sesión",
       "item": [
         {
           "name": "Logout",
@@ -1786,6 +2023,10 @@
     },
     {
       "key": "modulo_libre_id",
+      "value": ""
+    },
+    {
+      "key": "solicitud_id",
       "value": ""
     }
   ]

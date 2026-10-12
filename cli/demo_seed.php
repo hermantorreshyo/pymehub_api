@@ -52,4 +52,6 @@ echo "Check-ins de bienestar: {$r['checkins']}\n";
 echo "Alertas de bienestar: {$r['alertas']}\n";
 echo "Incidencias: {$r['incidencias']}\n";
 echo "Formación asignada o en curso: {$r['formacion']}\n";
+echo "Preferencias para el asesor: {$r['preferencias']}\n";
 echo "Usuarios: admin@, gerente@, rrhh@, conductor@ y gerente2@ " . DemoService::DOMINIO . "\n";
+echo "Asesor con IA: si hay clave de Mistral en config.php, pregenera las respuestas con php cli/ai_warmup.php\n";

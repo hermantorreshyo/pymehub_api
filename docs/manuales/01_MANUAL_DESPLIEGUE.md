@@ -1,9 +1,9 @@
 # Manual 01 · Despliegue de Pyme Hub
 
-**Aplica a:** `pymehub_api` 0.4.0 y `pymehub_web` 0.4.0
+**Aplica a:** `pymehub_api` 0.5.0 y `pymehub_web` 0.5.0
 **Entorno:** VPS Hostinger · Debian 13 · Apache 2.4 · PHP 8.4 · **MariaDB 11.8 LTS** (o MySQL 8.4 LTS) · sin Docker
 **Dominios:** `api.pymehub.hermantorres.com` (API) y `pymehub.hermantorres.com` (web)
-**Última revisión:** 12/10/2026 (v0.4.0: formación y lecciones del primer despliegue en producción)
+**Última revisión:** 12/10/2026 (v0.5.0: asesor de formación con IA; v0.4.0: formación y lecciones del primer despliegue)
 **Rutas en el servidor:**
 
 | Repositorio | Ruta | DocumentRoot |
@@ -199,8 +199,8 @@ sudo -u pymehub git clone https://github.com/hermantorreshyo/pymehub_api.git /va
 sudo -u pymehub git clone https://github.com/hermantorreshyo/pymehub_web.git /var/www/hermantorres/eude/pymehub/pymehub_web
 
 # Fijar la versión que se despliega (etiqueta)
-cd /var/www/hermantorres/eude/pymehub/pymehub_api && sudo -u pymehub git checkout v0.4.0
-cd /var/www/hermantorres/eude/pymehub/pymehub_web && sudo -u pymehub git checkout v0.4.0
+cd /var/www/hermantorres/eude/pymehub/pymehub_api && sudo -u pymehub git checkout v0.5.0
+cd /var/www/hermantorres/eude/pymehub/pymehub_web && sudo -u pymehub git checkout v0.5.0
 ```
 
 Permisos de la API: el código es de solo lectura para Apache; solo `storage/` y `config/` son escribibles.
@@ -446,6 +446,8 @@ sudo -u www-data php cli/demo_seed.php --borrar                                 
 
 Todos usan la contraseña indicada en `--password`, que no se guarda en ningún sitio: entrégala al tribunal por separado. Los datos son relativos al día en que se generan, así que conviene **regenerarlos la víspera de la defensa** con `--reset`. El conductor no tiene check-in de ese día, para hacerlo en directo; tiene un módulo completado, otro a medias (Conducción nocturna segura) y el catálogo por explorar. La pestaña **Recomendaciones** del gerente muestra sugerencias por siniestros, quejas, acogida y la alerta del equipo Nocturno.
 
+**Asesor de formación con IA.** Con la clave de Mistral en `config.php` (`ia.api_key`, nunca en el repositorio), pregenera las respuestas de los perfiles de la demo para poder usar `ia.mode = offline` en la defensa: `sudo -u www-data php cli/ai_warmup.php`. Sin clave, el asesor responde por reglas («Recomendación automática sin IA»). El detalle está en el manual 02, apartado 8.1.
+
 Si el comando responde «Los datos de demostración ya existen», ya se cargaron antes: añade `--reset` para regenerarlos con la contraseña nueva.
 
 ## 13. Verificación
@@ -461,14 +463,14 @@ curl -s https://api.pymehub.hermantorres.com/install -o /dev/null -w "%{http_cod
 curl -s https://api.pymehub.hermantorres.com/config/config.php -o /dev/null -w "%{http_code}\n"   # 404
 ```
 
-**Prueba de humo.** `tests/smoke_test.sh` hace 113 comprobaciones (sesión, CSRF, perfiles, aislamiento entre empresas, organización, bienestar, formación, CORS, bloqueo por fuerza bruta). Si no puede iniciar sesión como administrador se detiene y lo dice, en lugar de dar decenas de fallos. **Crea dos empresas y varios usuarios de prueba**, así que ejecútala en un entorno de pruebas, o en producción solo antes de cargar datos reales y borrando después lo creado:
+**Prueba de humo.** `tests/smoke_test.sh` hace 130 comprobaciones (sesión, CSRF, perfiles, aislamiento entre empresas, organización, bienestar, formación, asesor de IA, CORS, bloqueo por fuerza bruta). Si no puede iniciar sesión como administrador se detiene y lo dice, en lugar de dar decenas de fallos. **Crea dos empresas y varios usuarios de prueba**, así que ejecútala en un entorno de pruebas, o en producción solo antes de cargar datos reales y borrando después lo creado:
 
 ```bash
 cd /var/www/hermantorres/eude/pymehub/pymehub_api
 bash tests/smoke_test.sh https://api.pymehub.hermantorres.com https://pymehub.hermantorres.com TU_EMAIL_ADMIN 'TU_CONTRASEÑA'
 ```
 
-Resultado esperado: `113 correctas, 0 fallidas`.
+Resultado esperado: `130 correctas, 0 fallidas`.
 
 **Web.** `curl -s -o /dev/null -w '%{http_code}\n' https://pymehub.hermantorres.com/` y `…/js/config.js` deben dar **200**. Un 403 en la raíz y 404 en `config.js` indican que el `DocumentRoot` del vhost no termina en `/public` (apartado 10.2; revisa también el `-le-ssl.conf`).
 
@@ -611,7 +613,7 @@ cd /var/www/hermantorres/eude/pymehub/pymehub_api && sudo -u pymehub git checkou
 - [ ] HTTPS en ambos subdominios, con redirección desde HTTP.
 - [ ] Asistente completado, `/install` devuelve 404, `config.php` con permisos 640 y copia fuera del servidor.
 - [ ] `/v1/health` en `ok`.
-- [ ] Prueba de humo con 113 correctas (`tests/smoke_test.sh`).
+- [ ] Prueba de humo con 130 correctas (`tests/smoke_test.sh`).
 - [ ] La web responde 200 en `/` y en `js/config.js`, sin errores en la consola.
 - [ ] `/etc/cron.d/pymehub` activo, primera copia hecha (`copia_seguridad: ok`) y restauración probada.
 - [ ] Catálogo de formación con 15 módulos (`php cli/catalog_sync.php`).

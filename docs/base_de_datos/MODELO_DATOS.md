@@ -117,12 +117,13 @@ erDiagram
 | `modulo_formativo` | Micro-módulos | El propietario es un interlocutor: plataforma = catálogo global (15 módulos, `data/catalogo_formativo.php`, sincronizado por `codigo` con `cli/catalog_sync.php`); empresa = módulo propio. `huella` (0004): SHA-256 del contenido global para versionarlo solo cuando cambia |
 | `pregunta_modulo` | Cuestionario | 2–4 opciones |
 | `asignacion_formativa` | Formación de cada empleado | Origen: gestión, autoinscripción o asesor de IA. Una por persona y módulo. `VENCIDA` se calcula al leer (no completada con la fecha límite pasada). Desde 0004: `bloque_actual` (retomar), `ultima_nota` y `ultimo_envio` (cuestionario idempotente desde la cola sin conexión) |
-| `preferencia_formativa` | Preferencias para el asesor | Solo las ve el empleado (LEG-014) |
+| `preferencia_formativa` | Preferencias para el asesor | Solo las ve el empleado (LEG-014), que puede borrarlas; la gestión solo ve recuentos con 5 personas o más (IA-021). Objetivo con `CHECK` (0005) |
 | `checkin_bienestar` | Check-in diario | Nota cifrada; equipo guardado en el momento del check-in |
 | `puntuacion_riesgo` | Score de rotación | Histórico con factores y versión de reglas |
 | `alerta` | Alertas de rotación, bienestar y formación | |
 | `linea_base` | Rotación y absentismo previos al alta | RF-037 |
-| `solicitud_ia` | Registro de consultas al asesor | Sin contenido; solo hash |
+| `solicitud_ia` | Registro de consultas al asesor | Sin contenido; solo hash, origen (`LIVE`, `CACHE`, `REGLAS`), aviso servido (0005), tokens, latencia y valoración útil/no útil |
+| `respuesta_ia` | Caché del asesor (0005, `IA-014`) | Clave: hash de la entrada normalizada (perfil no identificativo, preferencias, catálogo y versión del prompt). Solo la salida validada; 7 días, sin caducidad las pregeneradas para la demo (`cli/ai_warmup.php`) |
 | `registro_auditoria` | Acciones sensibles | Solo inserción |
 | `limite_peticion` | Limitación de peticiones | |
 | `migracion_esquema` | Versiones aplicadas | La crea el migrador |

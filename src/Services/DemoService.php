@@ -43,6 +43,25 @@ final class DemoService
         'Mucho tráfico en la M-30, algo cansado.',
     ];
 
+    /**
+     * Perfiles de la demo del asesor (§12.6). cli/ai_warmup.php pregenera sus respuestas;
+     * conductor@ tiene precargado el primero.
+     */
+    public const PERFILES_ASESOR = [
+        'Conductor de noche' => [
+            'perfil'       => ['puesto' => 'CONDUCTOR', 'antiguedad' => 'MENOS_3_MESES', 'turno' => 'NOCHE'],
+            'preferencias' => ['objetivo' => 'SALUD_ENERGIA', 'intereses' => ['CONDUCCION', 'BIENESTAR'], 'formato' => 'TEXTO', 'minutos_semana' => 15, 'comentario' => null],
+        ],
+        'Repartidor hacia coordinador' => [
+            'perfil'       => ['puesto' => 'REPARTIDOR', 'antiguedad' => 'MAS_DE_1_ANO', 'turno' => 'MANANA'],
+            'preferencias' => ['objetivo' => 'RESPONSABILIDAD', 'intereses' => [], 'formato' => 'TEXTO', 'minutos_semana' => 30, 'comentario' => 'Me gustaría llegar a coordinar un equipo'],
+        ],
+        'Mozo de almacén' => [
+            'perfil'       => ['puesto' => 'MOZO_ALMACEN', 'antiguedad' => 'DE_3_A_12_MESES', 'turno' => 'ROTATIVO'],
+            'preferencias' => ['objetivo' => 'MEJORAR_TRABAJO', 'intereses' => ['ALMACEN'], 'formato' => 'TEXTO', 'minutos_semana' => 5, 'comentario' => null],
+        ],
+    ];
+
     private string $hash;
     private int $seq = 0;
 
@@ -153,6 +172,9 @@ final class DemoService
                 + $this->incidencias($tajo, $plantillaT, $hoy, null, $gerenteTajo);
             $resumen['formacion'] = $this->formacionCastilla($castilla, $plantillaC, $hoy, $conductor, $rrhh)
                 + $this->formacionTajo($tajo, $plantillaT, $hoy, $gerenteTajo);
+
+            // --- Fase 6 · Asesor: preferencias (demanda formativa) e historial de consultas sin contenido ---
+            $resumen['preferencias'] = $this->asesor($castilla, $plantillaC, $conductor) + $this->asesor($tajo, $plantillaT, null);
         });
 
         // Alertas de equipo con la última semana completa (RF-054)
@@ -480,6 +502,54 @@ final class DemoService
             'SELECT 1 FROM asignacion_formativa a JOIN modulo_formativo m ON m.id = a.modulo_id WHERE a.usuario_id = ? AND m.codigo = ?',
             [$uid, $codigo]
         ) !== null;
+    }
+
+    /**
+     * Preferencias de ~40 % de la plantilla (para la demanda formativa agregada, IA-021) y un
+     * historial de consultas atendidas por reglas: no se simula ningún uso real del proveedor de IA.
+     */
+    private function asesor(int $empresa, array $plantilla, ?int $conductor): int
+    {
+        $n = 0;
+        $objetivos = ['SALUD_ENERGIA', 'SALUD_ENERGIA', 'SEGURIDAD', 'MEJORAR_TRABAJO', 'RESPONSABILIDAD', 'HERRAMIENTAS_DIGITALES'];
+        $temas = ['CONDUCCION', 'ALMACEN', 'CLIENTE', 'BIENESTAR', 'DESARROLLO'];
+        foreach ($plantilla['empleados'] as $e) {
+            if ($e['id'] === $conductor) {
+                $p = self::PERFILES_ASESOR['Conductor de noche']['preferencias'];
+            } elseif (mt_rand(1, 100) <= 40) {
+                $obj = $objetivos[mt_rand(0, count($objetivos) - 1)];
+                if ($e['equipo'] === 'Nocturno' && mt_rand(1, 100) <= 60) {
+                    $obj = 'SALUD_ENERGIA';
+                }
+                $mis = [];
+                foreach ($temas as $t) {
+                    if (mt_rand(1, 100) <= 35) {
+                        $mis[] = $t;
+                    }
+                }
+                $p = ['objetivo' => $obj, 'intereses' => $mis, 'formato' => ['TEXTO', 'IMAGENES', 'VIDEO'][mt_rand(0, 2)],
+                    'minutos_semana' => [5, 15, 15, 30][mt_rand(0, 3)], 'comentario' => null];
+            } else {
+                continue;
+            }
+            Db::insert(
+                'INSERT INTO preferencia_formativa (usuario_id, objetivo, intereses, formato, minutos_semana, comentario) VALUES (?, ?, ?, ?, ?, ?)',
+                [$e['id'], $p['objetivo'], json_encode($p['intereses']), $p['formato'], $p['minutos_semana'], $p['comentario']]
+            );
+            $n++;
+            // 1–2 consultas en el último mes, atendidas por reglas (sin contenido, IA-012)
+            if ($e['id'] !== $conductor) {
+                foreach (range(1, mt_rand(1, 2)) as $k) {
+                    Db::insert(
+                        "INSERT INTO solicitud_ia (interlocutor_id, usuario_id, proveedor, hash_entrada, estado, servido_desde, util, creado_en)
+                         VALUES (?, ?, 'reglas', ?, 'OK', 'REGLAS', ?, ?)",
+                        [$empresa, $e['id'], hash('sha256', 'demo' . $e['id'] . $k), [null, 1, 1, 0][mt_rand(0, 3)],
+                            gmdate('Y-m-d H:i:s', time() - mt_rand(1, 29) * 86400 - mt_rand(0, 36000))]
+                    );
+                }
+            }
+        }
+        return $n;
     }
 
     /** Valor 1–5 alrededor de una media, con ruido. */

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Pyme Hub API
-  version: 0.4.0
+  version: 0.5.0
   description: |
     Contrato entre pymehub_api y pymehub_web (DEC-13).
     Autenticación por cookie de sesión HttpOnly. Toda petición que modifica datos
@@ -396,6 +396,34 @@ components:
         modulo: { type: object, properties: { id: { type: integer }, codigo: { type: string }, titulo: { type: string }, categoria: { $ref: '#/components/schemas/Categoria' }, duracion_min: { type: integer } } }
         regla: { type: string, enum: [SINIESTRO, QUEJA_CLIENTE, BIENESTAR_EQUIPO, ACOGIDA] }
         motivo: { type: string }
+    Preferencias:
+      type: object
+      description: 'Preferencias para el asesor (LEG-014: solo las ve el empleado)'
+      properties:
+        objetivo: { type: string, enum: [MEJORAR_TRABAJO, SEGURIDAD, SALUD_ENERGIA, RESPONSABILIDAD, HERRAMIENTAS_DIGITALES] }
+        intereses: { type: array, items: { $ref: '#/components/schemas/Categoria' } }
+        formato: { type: string, enum: [TEXTO, IMAGENES, VIDEO] }
+        minutos_semana: { type: integer, enum: [5, 15, 30] }
+        comentario: { type: [string, 'null'], maxLength: 200, description: 'Pasa por el PayloadGuard: sin emails, teléfonos, DNI/NIE, nombres de la empresa ni datos de salud (PH-AI-004)' }
+    RespuestaAsesor:
+      type: object
+      properties:
+        solicitud_id: { type: integer }
+        servido_desde: { type: string, enum: [live, cache, reglas], description: IA-015 }
+        generado_con_ia: { type: boolean, description: 'false = "Recomendación automática sin IA" (IA-002, IA-018)' }
+        recomendaciones:
+          type: array
+          minItems: 3
+          maxItems: 5
+          items:
+            type: object
+            properties:
+              orden: { type: integer }
+              motivo: { type: string, maxLength: 160 }
+              origen: { type: string, enum: [IA, REGLAS] }
+              modulo: { type: object, properties: { id: { type: integer }, titulo: { type: string }, resumen: { type: string }, categoria: { $ref: '#/components/schemas/Categoria' }, nivel: { $ref: '#/components/schemas/Nivel' }, duracion_min: { type: integer } } }
+              asignacion: { type: [object, 'null'], properties: { id: { type: integer }, estado: { type: string }, origen: { type: string } } }
+        plan_semanal: { type: string, maxLength: 300 }
 paths:
   /v1/health:
     get:
@@ -1021,7 +1049,7 @@ paths:
     post:
       summary: Autoinscripción en un módulo publicado (EMPLEADO · RF-047)
       security: [{ sesion: [], csrf: [] }]
-      requestBody: { content: { application/json: { schema: { type: object, required: [modulo_id], properties: { modulo_id: { type: integer } } } } } }
+      requestBody: { content: { application/json: { schema: { type: object, required: [modulo_id], properties: { modulo_id: { type: integer }, solicitud_id: { type: integer, description: 'Si viene de una recomendación del asesor: origen ASESOR_IA' } } } } } }
       responses:
         '201': { description: Inscrito, content: { application/json: { schema: { $ref: '#/components/schemas/Asignacion' } } } }
         '404': { description: PH-TENANT-001 }
@@ -1087,6 +1115,68 @@ paths:
                   meta: { type: object, properties: { aprobado_con: { type: integer, example: 70 } } }
         '409': { description: PH-TRN-001 }
         '422': { description: PH-VAL-001 }
+  /v1/me/training/preferences:
+    get:
+      summary: Mis preferencias para el asesor y las opciones disponibles (EMPLEADO)
+      security: [{ sesion: [] }]
+      responses:
+        '200': { description: 'data = Preferencias o null; meta.opciones = objetivos, temas, formatos y minutos' }
+    put:
+      summary: Guardar mis preferencias (EMPLEADO · §12.2, IA-010)
+      security: [{ sesion: [], csrf: [] }]
+      requestBody: { content: { application/json: { schema: { $ref: '#/components/schemas/Preferencias' } } } }
+      responses:
+        '200': { description: ok, content: { application/json: { schema: { $ref: '#/components/schemas/Preferencias' } } } }
+        '422': { description: 'PH-VAL-001 · PH-AI-004 (el comentario contiene datos personales o de salud)' }
+    delete:
+      summary: Borrar mis preferencias (EMPLEADO · LEG-014)
+      security: [{ sesion: [], csrf: [] }]
+      responses:
+        '204': { description: Borradas }
+  /v1/me/training/advisor:
+    post:
+      summary: Recomendaciones del asesor de formación (EMPLEADO · §12, IA-001 a IA-019)
+      description: |
+        Devuelve entre 3 y 5 módulos del catálogo con su motivo y un plan semanal. Nunca devuelve un error del proveedor:
+        si falla, se agota la cuota o no hay red, responde con la caché o con el respaldo por reglas y lo indica en
+        `meta.aviso` (PH-AI-001, PH-AI-002, PH-AI-003). Al proveedor solo se envían el puesto genérico, el tramo de
+        antigüedad, el turno, las preferencias y el catálogo resumido (§12.3).
+      security: [{ sesion: [], csrf: [] }]
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/RespuestaAsesor' }
+                  meta: { type: object, properties: { aviso: { type: object, properties: { code: { type: string }, message: { type: string } } } } }
+        '422': { description: PH-VAL-001 (sin preferencias) }
+        '429': { description: PH-RATE-001 }
+  /v1/me/training/advisor/feedback:
+    post:
+      summary: Valorar si la recomendación ha sido útil (EMPLEADO)
+      security: [{ sesion: [], csrf: [] }]
+      requestBody: { content: { application/json: { schema: { type: object, required: [solicitud_id, util], properties: { solicitud_id: { type: integer }, util: { type: boolean } } } } } }
+      responses:
+        '200': { description: ok }
+        '404': { description: PH-TENANT-001 }
+  /v1/training/demand:
+    get:
+      summary: Demanda formativa agregada (GERENTE, RRHH · IA-021)
+      description: Recuentos de objetivos, temas y minutos de las preferencias de la plantilla. Con menos de 5 personas no se muestra (LEG-002, `meta.aviso.code` = PH-WB-001).
+      security: [{ sesion: [] }]
+      responses:
+        '200': { description: 'data = { disponible, personas, objetivos[], temas[], minutos[], uso: { consultas_30d, utilidad } }' }
+  /v1/admin/ai-usage:
+    get:
+      summary: Uso del asesor de IA (ADMIN)
+      description: Consultas por origen, avisos, valoraciones, tokens, latencia y consultas por empresa. Sin contenido de ninguna consulta.
+      security: [{ sesion: [] }]
+      parameters: [{ name: days, in: query, schema: { type: integer, default: 30, maximum: 90 } }]
+      responses:
+        '200': { description: ok }
   /v1/alerts:
     get:
       summary: Alertas de la empresa (GERENTE, RRHH · §8.4)

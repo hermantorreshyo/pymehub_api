@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prueba de humo de Pyme Hub API (fases 0-5).
+# Prueba de humo de Pyme Hub API (fases 0-6).
 # Uso: tests/smoke_test.sh <URL_API> <ORIGEN_FRONTEND> <EMAIL_ADMIN> <PASSWORD_ADMIN>
 # Crea dos empresas de prueba con NIF y emails aleatorios. No usar en producción con datos reales.
 set -uo pipefail
@@ -198,6 +198,31 @@ check "asignación que no es suya -> PH-TRN-001" "$(curl -s -b "$T/e" "$B/v1/me/
 check "recomendaciones por reglas (RF-043)" "$(curl -s -b "$T/h" "$B/v1/training/recommendations?employee_id=$EID" | jq_ "'ok' if 'por_regla' in d['meta'] else ''")" "ok"
 check "seguimiento de la gestión" "$(curl -s -b "$T/h" "$B/v1/training/assignments?modulo_id=$MP&estado=COMPLETADA" | jq_ "d['meta']['total']")" "1"
 check "resumen de formación" "$(curl -s -b "$T/g" "$B/v1/training/summary" | jq_ "d['data']['completadas']")" "1"
+
+echo "== Asesor de formación con IA (fase 6)"
+check "sin preferencias todavía" "$(curl -s -b "$T/e" "$B/v1/me/training/preferences" | jq_ "str(d['data'])+' '+str(len(d['meta']['opciones']['objetivos']))")" "None 5"
+check "consulta sin preferencias -> PH-VAL-001" "$(send e POST "$CE" /v1/me/training/advisor '{}' | code)" "PH-VAL-001"
+check "comentario con email -> PH-AI-004 (IA-010)" "$(send e PUT "$CE" /v1/me/training/preferences '{"objetivo":"SEGURIDAD","intereses":["CONDUCCION"],"minutos_semana":15,"comentario":"Escribidme a yo@correo.es"}' | code)" "PH-AI-004"
+check "comentario con el nombre de alguien de la empresa -> PH-AI-004" "$(send e PUT "$CE" /v1/me/training/preferences '{"objetivo":"SEGURIDAD","intereses":["CONDUCCION"],"minutos_semana":15,"comentario":"Quiero hacer lo mismo que Lucía"}' | code)" "PH-AI-004"
+check "comentario con datos de salud -> PH-AI-004" "$(send e PUT "$CE" /v1/me/training/preferences '{"objetivo":"SEGURIDAD","intereses":["CONDUCCION"],"minutos_semana":15,"comentario":"Tengo ansiedad al conducir"}' | code)" "PH-AI-004"
+check "guardar preferencias (§12.2)" "$(send e PUT "$CE" /v1/me/training/preferences '{"objetivo":"SEGURIDAD","intereses":["CONDUCCION","ALMACEN"],"formato":"IMAGENES","minutos_semana":15,"comentario":"Quiero conducir más tranquilo en ciudad"}' | jq_ "d['data']['objetivo']+' '+str(d['data']['minutos_semana'])")" "SEGURIDAD 15"
+send e POST "$CE" /v1/me/training/advisor '{}' > "$T/adv.json"
+curl -s -b "$T/e" "$B/v1/me/training/catalog" > "$T/cat.json"
+CATIDS=$(jq_ "','.join(str(m['id']) for m in d['data'])" < "$T/cat.json")
+HECHOS=$(jq_ "','.join(str(m['id']) for m in d['data'] if m['asignacion'] and m['asignacion']['estado']=='COMPLETADA')" < "$T/cat.json")
+check "3 a 5 recomendaciones del catálogo, sin completados (IA-001)" "$(jq_ "3 <= len(d['data']['recomendaciones']) <= 5 and all(str(r['modulo']['id']) in '$CATIDS'.split(',') and str(r['modulo']['id']) not in '$HECHOS'.split(',') for r in d['data']['recomendaciones']) and len(set(r['modulo']['id'] for r in d['data']['recomendaciones'])) == len(d['data']['recomendaciones'])" < "$T/adv.json")" "True"
+check "indica de dónde sale la respuesta (IA-015, IA-018)" "$(jq_ "d['data']['servido_desde'] in ('live','cache','reglas') and isinstance(d['data']['generado_con_ia'], bool) and len(d['data']['plan_semanal']) > 0" < "$T/adv.json")" "True"
+SOL=$(jq_ "d['data']['solicitud_id']" < "$T/adv.json")
+LIBRE=$(jq_ "[r['modulo']['id'] for r in d['data']['recomendaciones'] if not r['asignacion']][0]" < "$T/adv.json")
+check "valorar la recomendación" "$(send e POST "$CE" /v1/me/training/advisor/feedback "{\"solicitud_id\":$SOL,\"util\":true}" | jq_ "d['data']['util']")" "True"
+check "valorar una consulta ajena -> PH-TENANT-001" "$(send e POST "$CE" /v1/me/training/advisor/feedback '{"solicitud_id":999999,"util":false}' | code)" "PH-TENANT-001"
+check "inscribirse desde el asesor (origen ASESOR_IA)" "$(send e POST "$CE" /v1/me/training/enroll "{\"modulo_id\":$LIBRE,\"solicitud_id\":$SOL}" | jq_ "d['data']['origen']")" "ASESOR_IA"
+check "la gestión no ve preferencias individuales -> PH-PERM-001 (IA-017)" "$(curl -s -b "$T/h" "$B/v1/me/training/preferences" | code)" "PH-PERM-001"
+check "demanda con menos de 5 personas: oculta (IA-021, LEG-002)" "$(curl -s -b "$T/h" "$B/v1/training/demand" | jq_ "str(d['data']['disponible'])+' '+str(d['data']['personas'])+' '+d['meta']['aviso']['code']")" "False None PH-WB-001"
+check "el empleado no ve la demanda -> PH-PERM-001" "$(curl -s -b "$T/e" "$B/v1/training/demand" | code)" "PH-PERM-001"
+check "uso de IA para la plataforma (sin contenido)" "$(curl -s -b "$T/a" "$B/v1/admin/ai-usage" | jq_ "d['data']['consultas'] >= 1 and 'proveedor' in d['data']")" "True"
+check "la gestión no ve el uso de IA de la plataforma -> PH-PERM-001" "$(curl -s -b "$T/h" "$B/v1/admin/ai-usage" | code)" "PH-PERM-001"
+check "borrar mis preferencias (LEG-014)" "$(curl -s -b "$T/e" -X DELETE -H "X-CSRF-Token: $CE" -o /dev/null -w '%{http_code}' "$B/v1/me/training/preferences")" "204"
 
 echo "== Baja laboral"
 check "motivo no válido -> PH-VAL-001" "$(send h DELETE "$CH" "/v1/employees/$EID" "{\"fecha_baja\":\"$HOY\",\"motivo_baja\":\"DESPIDO\"}" | code)" "PH-VAL-001"

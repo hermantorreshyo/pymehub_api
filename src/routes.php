@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 use PymeHub\Controllers\V1\AdminEmpresaController as Empresas;
 use PymeHub\Controllers\V1\AlertaController as Alertas;
+use PymeHub\Controllers\V1\AsesorController as Asesor;
 use PymeHub\Controllers\V1\BienestarController as Bienestar;
 use PymeHub\Controllers\V1\CheckinController as Checkins;
 use PymeHub\Controllers\V1\AuthController as AuthC;
@@ -28,6 +29,7 @@ return static function (Router $r): void {
     $empleado = Auth::require('EMPLEADO');
     $planBienestar = Auth::plan('bienestar');
     $planFormacion = Auth::plan('formacion');
+    $planAsesor = Auth::plan('asesor_formacion');
 
     // Salud (pública)
     $r->add('GET', '/v1/health', [Health::class, 'show']);
@@ -44,6 +46,7 @@ return static function (Router $r): void {
     $r->add('GET',   '/v1/admin/tenants/{id}', [Empresas::class, 'show'], [$admin]);
     $r->add('PATCH', '/v1/admin/tenants/{id}', [Empresas::class, 'update'], [$admin, $csrf]);
     $r->add('GET',   '/v1/admin/metrics', [Empresas::class, 'metrics'], [$admin]);
+    $r->add('GET',   '/v1/admin/ai-usage', [Asesor::class, 'usage'], [$admin]);
 
     // Cuentas de RR. HH. (solo gerente)
     $r->add('GET',    '/v1/users', [Usuarios::class, 'index'], [$gerente]);
@@ -85,10 +88,19 @@ return static function (Router $r): void {
     $r->add('DELETE', '/v1/training/assignments/{id}', [Formacion::class, 'unassign'], [$gestion, $planFormacion, $csrf]);
     $r->add('GET',    '/v1/training/recommendations', [Formacion::class, 'recommendations'], [$gestion, $planFormacion]);
     $r->add('GET',    '/v1/training/summary', [Formacion::class, 'summary'], [$gestion, $planFormacion]);
+    $r->add('GET',    '/v1/training/demand', [Asesor::class, 'demand'], [$gestion, $planAsesor]);
 
     // Formación del empleado
     $r->add('GET',  '/v1/me/training', [MiFormacion::class, 'index'], [$empleado, $planFormacion]);
     $r->add('GET',  '/v1/me/training/catalog', [MiFormacion::class, 'catalog'], [$empleado, $planFormacion]);
+
+    // Asesor de formación con IA (§8.7, fase 6)
+    $r->add('GET',    '/v1/me/training/preferences', [Asesor::class, 'preferences'], [$empleado, $planAsesor]);
+    $r->add('PUT',    '/v1/me/training/preferences', [Asesor::class, 'savePreferences'], [$empleado, $planAsesor, $csrf]);
+    $r->add('DELETE', '/v1/me/training/preferences', [Asesor::class, 'deletePreferences'], [$empleado, $planAsesor, $csrf]);
+    $r->add('POST',   '/v1/me/training/advisor', [Asesor::class, 'advise'], [$empleado, $planAsesor, $csrf]);
+    $r->add('POST',   '/v1/me/training/advisor/feedback', [Asesor::class, 'feedback'], [$empleado, $planAsesor, $csrf]);
+
     $r->add('POST', '/v1/me/training/enroll', [MiFormacion::class, 'enroll'], [$empleado, $planFormacion, $csrf]);
     $r->add('GET',  '/v1/me/training/{id}', [MiFormacion::class, 'show'], [$empleado, $planFormacion]);
     $r->add('POST', '/v1/me/training/{id}/progress', [MiFormacion::class, 'progress'], [$empleado, $planFormacion, $csrf]);

@@ -2,7 +2,7 @@
 
 **Proyecto:** Pyme Hub — TFM EUDE Business School (The Best Team)
 **Documento:** Especificación de requerimientos técnicos del Producto Mínimo Viable (MVP)
-**Versión:** 0.9.2 · 12/10/2026
+**Versión:** 0.9.3 · 12/10/2026
 **Stack:** LAMP nativo, sin Docker (Linux · Apache · **MariaDB 11.8 LTS o MySQL 8.4 LTS** · PHP 8.4). Producción: MariaDB 11.8
 **Repositorios:** dos, independientes: `pymehub_api` (backend tipo API) y `pymehub_web` (frontend que consume la API)
 **Estado:** Alineado con la versión 4 del documento del TFM (carpeta *Revisión 004*). Los cambios que este documento obliga a trasladar al TFM se listan en §22.3.
@@ -21,6 +21,7 @@
 | 0.8 | 03/10/2026 | Fase 3 (Organización): `RF-020` importación CSV de la plantilla y `RF-021` a `RF-023` (empleados, baja laboral e invitación de empleados) en §8.3; `LEG-016` referido a la columna real `interlocutor.fecha_contrato_encargado` |
 | 0.9 | 12/10/2026 | **Compatibilidad con MariaDB 11.8 LTS** (`DEC-05`): el VPS de producción ya usa MariaDB 11.8.6 con otras aplicaciones y no se puede sustituir. La API funciona sobre MySQL 8.4 y MariaDB 11.8 con el SQL común a ambos (`RNF-009`). Instalador con detección de motor y versión mínima por motor (`RF-091`), collation comprobada antes de migrar, conexión por socket, copias con `mariadb-dump` o `mysqldump` (`RNF-064`). `P-11` cerrado |
 | 0.9.1 | 12/10/2026 | Rutas reales de producción: `/var/www/hermantorres/eude/pymehub/pymehub_api` y `/var/www/hermantorres/eude/pymehub/pymehub_web` (§3.2, §4.1) |
+| 0.9.3 | 12/10/2026 | Fase 6 (Asesor de formación): implementación de §12.5 en §12.7 (objetivos cerrados, perfil no identificativo, caché independiente del avance, orden de los modos, cuotas y PayloadGuard ampliado a datos de salud); `GET /v1/admin/ai-usage` sin contenido |
 | 0.9.2 | 12/10/2026 | Fase 5 (Upskilling): §8.5 con el seguimiento (`GET /v1/training/assignments`), la retirada de asignaciones y el resumen (`GET /v1/training/summary`); §10 con el detalle de `RF-041` a `RF-047` (estado `VENCIDA` calculado, idempotencia del cuestionario sin conexión, reglas de `RF-043` sin datos individuales de bienestar) |
 
 ---
@@ -655,6 +656,18 @@ Para que el modo `offline` funcione en la defensa, se pregeneran las respuestas 
 | Mozo de almacén, turno rotativo, 5 meses | Objetivo: hacer mejor mi trabajo · Temas: almacén y carga · 5 min/semana | Uso seguro del transpalé, Manipulación de cargas (plan de 1 módulo por semana) |
 
 El usuario `conductor@` de la demo tiene precargado el primer perfil. Si en la defensa se prueba un perfil distinto, se intenta en vivo y, sin red, responde el respaldo por reglas.
+
+### 12.7 Implementación (v0.5.0)
+
+- **Objetivos** (catálogo cerrado, `CHECK` en `preferencia_formativa`): `MEJORAR_TRABAJO`, `SEGURIDAD`, `SALUD_ENERGIA`, `RESPONSABILIDAD`, `HERRAMIENTAS_DIGITALES`. Temas = categorías del catálogo; formato `TEXTO`, `IMAGENES`, `VIDEO`; 5, 15 o 30 minutos.
+- **Perfil enviado**: puesto, tramo de antigüedad (`MENOS_3_MESES`, `DE_3_A_12_MESES`, `MAS_DE_1_ANO`) y turno. `PayloadGuard::verificar()` comprueba la lista blanca antes de cada llamada.
+- **PayloadGuard del comentario** (`PH-AI-004`): email, teléfono, DNI/NIE, nombres y apellidos de las personas de la empresa y términos de salud (categoría especial del RGPD).
+- **Caché** (`respuesta_ia`): el hash no incluye el avance de la persona, para que perfiles iguales compartan respuesta; los módulos completados se descartan al servir y se completa con reglas (`IA-001`).
+- **Modos**: `live` llama siempre al proveedor; `cache_first` usa la caché vigente y, si no hay, el proveedor; `offline` usa la caché (también caducada o pregenerada) y, si no hay, reglas. Con fallo del proveedor (`PH-AI-001`), cuota agotada (`PH-AI-002`, 5 consultas en vivo al día por empleado y `cuota_ia_diaria` por empresa) o respuesta no válida tras un reintento (`PH-AI-003`), se sirve la última caché del perfil o las reglas, con el aviso en `meta.aviso`.
+- **Respaldo por reglas** (`IA-002`): puntuación por módulos del objetivo, categorías del objetivo o del puesto, temas, puesto destinatario, turno de noche o rotativo, coincidencia con el comentario y nivel según antigüedad; 3 módulos con 5 o 15 minutos y 4 con 30.
+- **Inscripción**: `POST /v1/me/training/enroll` con `solicitud_id` crea la asignación con origen `ASESOR_IA`.
+- **Uso de la plataforma**: `GET /v1/admin/ai-usage` (consultas por origen, avisos, valoraciones, tokens, latencia y por empresa), sin contenido.
+- **Retención**: `cli/purge_retention.php` borra la caché caducada hace más de 30 días y el registro de consultas de más de 12 meses.
 
 ---
 

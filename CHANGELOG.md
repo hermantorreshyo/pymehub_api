@@ -2,6 +2,38 @@
 
 Formato basado en *Keep a Changelog*; versiones SemVer.
 
+## [0.5.0] · 2026-10-12
+
+Avance 4 · **Asesor de formación con IA** (fase 6 del plan, §12), la única funcionalidad con IA generativa. Incluye el manual 02 de producción. **Migración nueva: `0005_asesor_ia`.**
+
+### Base de datos
+- `0005_asesor_ia`: tabla `respuesta_ia` (caché del asesor con la salida validada, sin datos de la persona; `IA-014`), `solicitud_ia.aviso` e índice por fecha, y `CHECK` del objetivo en `preferencia_formativa`. Probada en MariaDB 11.8.3 y MySQL.
+
+### Núcleo
+- `src/Ai/AiGateway`: adaptador intercambiable por `config.php` para Mistral y APIs compatibles con chat/completions; cURL, 20 s, un reintento ante 429/5xx y salida JSON (`IA-011`, `IA-012`).
+- `src/Ai/PayloadGuard`: lista blanca de §12.3 comprobada antes de cada llamada y rechazo del comentario con email, teléfono, DNI/NIE, nombres de la empresa o datos de salud (`IA-010`, `LEG-010`, `PH-AI-004`).
+- `src/Ai/prompts/advisor.v1.md`: prompt de sistema versionado (`IA-019`).
+- `Services/AsesorService`: modos `live`, `cache_first` y `offline` (`IA-015`), validación del esquema con un reintento (`IA-013`), anclaje al catálogo y relleno con reglas (`IA-001`), respaldo determinista (`IA-002`), cuotas por empleado y empresa (`IA-016`) y plan semanal.
+- `cli/ai_warmup.php`: pregenera las respuestas de los tres perfiles de la demo (§12.6) en cada empresa de demostración.
+
+### Seguridad y privacidad
+- Al proveedor solo llegan el puesto, el tramo de antigüedad, el turno, las preferencias filtradas y el catálogo resumido. Nunca nombres, empresa, salud, incidencias ni notas.
+- La clave solo vive en `config.php` y nunca se registra (`IA-020`); el registro de consultas no guarda contenido.
+- La gestión no ve las preferencias individuales (`IA-017`, `LEG-014`); la demanda agregada exige 5 personas (`IA-021`).
+
+### Endpoints
+- Empleado: `GET/PUT/DELETE /v1/me/training/preferences`, `POST /v1/me/training/advisor`, `POST /v1/me/training/advisor/feedback`; `POST /v1/me/training/enroll` acepta `solicitud_id` (origen `ASESOR_IA`).
+- Gestión: `GET /v1/training/demand`. Plataforma: `GET /v1/admin/ai-usage`.
+
+### Operación
+- `cli/purge_retention.php`: borra la caché caducada y el registro de consultas de más de 12 meses.
+- Datos de demostración: preferencias de ~40 % de la plantilla (demanda formativa), `conductor@` con el primer perfil de §12.6 e historial de consultas atendidas por reglas (no se simula uso real del proveedor).
+- `tests/smoke_test.sh`: **130 comprobaciones** (17 del asesor), correctas en MariaDB 11.8.3 y MySQL. Probado también contra un proveedor simulado: respuesta válida, caída (`PH-AI-001`), respuesta no JSON (`PH-AI-003`), ids inventados y cuota agotada (`PH-AI-002`).
+
+### Documentación
+- **Manual 02** (`docs/manuales/02_DESPLIEGUE_VPS_PRODUCCION.md`) incorporado y actualizado con la instalación real: código de `root:www-data` sin usuario `pymehub`, `core.fileMode false`, `/etc/cron.d/pymehub`, `bash` para las copias, `mariadb -u root -p`, `intl`, bloqueo en el `-le-ssl.conf`, comprobación de la web, activación del asesor (8.1) y nuevos problemas frecuentes.
+- Manual 01, OpenAPI 0.5.0, colección de Postman (carpeta «12 · Asesor de formación con IA»), requisitos v0.9.3 (§12.7), modelo de datos, prompt maestro y README.
+
 ## [0.4.0] · 2026-10-12
 
 Avance 3 · **Formación adaptativa** (fase 5 del plan, §10). Incluye las correcciones de despliegue detectadas en la instalación de producción. **Migración nueva: `0004_formacion_avance`.**
