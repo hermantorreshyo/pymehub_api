@@ -37,7 +37,7 @@ Roles (`usuario.perfil`): `ADMIN` (plataforma, no ve datos de empleados), `GEREN
 
 ## 4. Arquitectura (resumen de decisiones)
 
-- LAMP nativo **sin Docker** en un VPS de Hostinger (Debian 13), Apache 2.4, **PHP 8.4 sin frameworks ni Composer**, **MySQL 8.4 LTS** (nunca sintaxis exclusiva de MariaDB).
+- LAMP nativo **sin Docker** en un VPS de Hostinger (Debian 13), Apache 2.4, **PHP 8.4 sin frameworks ni Composer**, **MariaDB 11.8 LTS en producción o MySQL 8.4 LTS**, con el SQL común a los dos motores (`DEC-05`, `RNF-009`; reglas en el `CLAUDE.md` de la API).
 - Dos repositorios independientes:
   - `pymehub_api` → `https://api.pymehub.hermantorres.com` (solo JSON, `/v1`).
   - `pymehub_web` → `https://pymehub.hermantorres.com` (PWA en HTML, CSS y JavaScript nativo con módulos ES, sin compilación). **Solo consume la API.**

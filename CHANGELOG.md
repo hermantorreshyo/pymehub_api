@@ -2,6 +2,49 @@
 
 Formato basado en *Keep a Changelog*; versiones SemVer.
 
+## [0.3.1] · 2026-10-12
+
+Compatibilidad con **MariaDB 11.8 LTS**, el motor del VPS de producción (`DEC-05`). La API funciona sobre MariaDB ≥ 11.4.5 y MySQL ≥ 8.4.0. **Sin migraciones nuevas.**
+
+### Base de datos
+- `Core/DbEngine.php`: detección del motor y la versión (`SELECT VERSION()`), mínimos por motor y comprobación de la collation (`RNF-008`).
+- `Core/Migrator.php`: comprueba la collation antes de migrar. Si el servidor no tiene `utf8mb4_0900_ai_ci`, usa `utf8mb4_uca1400_ai_ci` en tiempo de ejecución, sin editar las migraciones publicadas (§3.2, opción B). Lo he verificado en MariaDB 10.11, que no la tiene.
+- `Core/Db.php`: conexión opcional por socket Unix (`db.socket`).
+- Migraciones 0001 a 0003 sin cambios: se aplican igual en MariaDB 11.8 y MySQL (`RNF-009`).
+
+### Núcleo
+- Instalador (`RF-091`):
+  - Acepta MariaDB ≥ 11.4.5 y MySQL ≥ 8.4.0 (se mantiene `PYMEHUB_PERMITIR_MYSQL80` para desarrollo).
+  - Mensajes con el motor y la versión detectados y el mínimo exigido.
+  - Comprueba la collation y que la base esté vacía antes de crear nada, y guarda `db.engine` en `config.php`.
+  - Admite `localhost` o socket Unix y explica la diferencia entre `'usuario'@'localhost'` y `'usuario'@'127.0.0.1'`.
+  - Textos «MySQL 8.4 / MariaDB 11.8» y «base de datos».
+- `config.example.php` con `db.engine` y `db.socket`.
+
+### Operación
+- `cli/backup.sh` (`RNF-064`):
+  - Usa `mariadb-dump` o, si no existe, `mysqldump`, y avisa con un error claro si no hay ninguno.
+  - Las credenciales se escriben desde PHP, así que admite contraseñas con espacios o caracteres especiales, y puede conectar por socket.
+- `/v1/health` sin cambios: no expone el motor ni su versión.
+
+### Pruebas
+- **MariaDB 11.8.3:**
+  - Instalador web desde una base vacía, por socket y por TCP.
+  - Prueba de humo con **87 correctas, 0 fallidas** y colección de Postman con 40 peticiones correctas.
+  - `demo_seed.php`, dos veces seguidas.
+  - Copia con `mariadb-dump` y restauración en una base nueva.
+- **MySQL:** instalación limpia y prueba de humo con 87 correctas. Las hice en MySQL 8.0 con `PYMEHUB_PERMITIR_MYSQL80` porque mi entorno no tiene 8.4.
+- **Rechazos del instalador:** MariaDB 10.11, base no vacía y credenciales erróneas.
+
+### Documentación
+- Requisitos v0.9:
+  - `DEC-05`, `RNF-002`, `RNF-008`, `RNF-009` y §3.5.
+  - `RF-091` y criterio de aceptación 17.
+  - `P-11` cerrado.
+  - Tabla de alineación con el TFM, que ya puede mantener MariaDB.
+- `CLAUDE.md` con las reglas de SQL común; README, prompt maestro e índice de documentación.
+- Manual 01, apartados 4 a 6, 14 y 17, con MariaDB 11.8 como motor válido. Se enlaza el manual 02 de despliegue en producción.
+
 ## [0.3.0] · 2026-10-11
 
 ### Añadido

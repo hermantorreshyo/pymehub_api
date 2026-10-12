@@ -2,8 +2,8 @@
 
 **Proyecto:** Pyme Hub — TFM EUDE Business School (The Best Team)
 **Documento:** Especificación de requerimientos técnicos del Producto Mínimo Viable (MVP)
-**Versión:** 0.8 · 03/10/2026
-**Stack:** LAMP nativo, sin Docker (Linux · Apache · **MySQL 8.4 LTS** · PHP 8.4)
+**Versión:** 0.9 · 12/10/2026
+**Stack:** LAMP nativo, sin Docker (Linux · Apache · **MariaDB 11.8 LTS o MySQL 8.4 LTS** · PHP 8.4). Producción: MariaDB 11.8
 **Repositorios:** dos, independientes: `pymehub_api` (backend tipo API) y `pymehub_web` (frontend que consume la API)
 **Estado:** Alineado con la versión 4 del documento del TFM (carpeta *Revisión 004*). Los cambios que este documento obliga a trasladar al TFM se listan en §22.3.
 
@@ -19,6 +19,7 @@
 | 0.6 | 03/10/2026 | **Base de datos MySQL 8.4 LTS** en lugar de MariaDB (`DEC-05`, §3.5); **backend API y frontend en repositorios separados** con contrato OpenAPI versionado (`DEC-03`, `DEC-13`, §4); frontend sin código de servidor que solo consume la API (`RNF-007`); §13 reescrito con el Manual de Imagen Corporativa v1.0, el Manual de Maquetación HTML/CSS v1.0 y los mockups aprobados, incluidas las diferencias entre los mockups y el alcance del MVP (§13.6) |
 | 0.7 | 03/10/2026 | **Modelo de datos interlocutor/usuario** (§7, `DEC-14`): todos los actores en `interlocutor` (atributo `tipo`) y las personas en `usuario` (atributo `perfil`), con un interlocutor que tiene varios usuarios; tablas en español. Repositorios renombrados a `pymehub_api` y `pymehub_web` (GitHub). Aclaración de `RF-096`: en MySQL el DDL no es transaccional |
 | 0.8 | 03/10/2026 | Fase 3 (Organización): `RF-020` importación CSV de la plantilla y `RF-021` a `RF-023` (empleados, baja laboral e invitación de empleados) en §8.3; `LEG-016` referido a la columna real `interlocutor.fecha_contrato_encargado` |
+| 0.9 | 12/10/2026 | **Compatibilidad con MariaDB 11.8 LTS** (`DEC-05`): el VPS de producción ya usa MariaDB 11.8.6 con otras aplicaciones y no se puede sustituir. La API funciona sobre MySQL 8.4 y MariaDB 11.8 con el SQL común a ambos (`RNF-009`). Instalador con detección de motor y versión mínima por motor (`RF-091`), collation comprobada antes de migrar, conexión por socket, copias con `mariadb-dump` o `mysqldump` (`RNF-064`). `P-11` cerrado |
 
 ---
 
@@ -79,7 +80,7 @@ Además, el MVP incluye el **núcleo** (multiempresa, usuarios, cuatro roles, im
 | `DEC-02` | PHP 8.4 puro, sin frameworks ni Composer | Cero dependencias, despliegue por copia, sin build. **Sustituye** a Laravel 11 del `PROMPT_DESARROLLO_PYME_HUB.md` |
 | `DEC-03` | **Backend tipo API y frontend en dos repositorios Git separados**: `pymehub_api` (API REST, solo JSON) y `pymehub_web` (PWA). Se versionan, prueban y despliegan de forma independiente | El frontend consume exclusivamente la API: nunca accede a la base de datos ni contiene lógica de negocio |
 | `DEC-04` | Frontend en HTML + CSS + JavaScript nativo (ES Modules), PWA | Sin pipeline de build. **Sustituye** a React/Vue + TypeScript |
-| `DEC-05` | **MySQL 8.4 LTS** (Oracle MySQL Community Server), InnoDB, `utf8mb4` con `utf8mb4_0900_ai_ci` | Requisito del proyecto. Es la versión LTS soportada en Debian 13; MySQL 8.0 no está disponible para esa versión de Debian (§3.5) |
+| `DEC-05` | **MariaDB 11.8 LTS o MySQL 8.4 LTS**, InnoDB, `utf8mb4` con `utf8mb4_0900_ai_ci`. El SQL usa solo el subconjunto común de ambos motores (`RNF-009`). **Producción: MariaDB 11.8** (v0.9; sustituye a la decisión de la v0.6) | El VPS de producción ya tiene MariaDB 11.8.6, que usan otras aplicaciones; su propietario no autoriza a sustituirlo, a instalar MySQL en paralelo ni a cambiar su configuración global. Mantener la compatibilidad con MySQL 8.4 evita depender de un solo motor (§3.5) |
 | `DEC-06` | Sesión en cookie `HttpOnly` + token CSRF | Más segura que un token en `localStorage`; funciona entre subdominios del mismo dominio |
 | `DEC-07` | Motor de riesgo por reglas ponderadas, con fuente y nivel de evidencia por factor | Explicabilidad (AI Act) y ausencia de datos históricos para ML |
 | `DEC-08` | Chart.js y Google Fonts por CDN como únicas dependencias del frontend | Estándar habitual |
@@ -90,7 +91,7 @@ Además, el MVP incluye el **núcleo** (multiempresa, usuarios, cuatro roles, im
 | `DEC-14` | **Todos los actores del sistema en la tabla `interlocutor`**, diferenciados por `tipo` (`PLATAFORMA`, `EMPRESA`, `FORMADOR`). **Las personas en `usuario`**, diferenciadas por `perfil` (`ADMIN`, `GERENTE`, `RRHH`, `EMPLEADO`, `FORMADOR`). Un interlocutor tiene varios usuarios. La coherencia tipo-perfil la garantiza la base de datos con claves foráneas compuestas y catálogos, sin triggers | Requisito del proyecto; permite que una empresa tenga varios empleados con usuarios diferenciados por perfil y añadir actores en la fase 2 sin rediseñar |
 | `DEC-12` | El MVP **no implementa** los módulos 4 y 5, pero su modelo de datos no debe impedirlos: los módulos formativos llevan un campo de origen (`pymehub` / `empresa`, con `formador` reservado) y las fichas de empleado guardan el historial formativo | Evitar una migración disruptiva en la fase 2 |
 
-> **Alineación con el TFM:** `DEC-02`, `DEC-04` y `DEC-09` ya están reflejadas en los apartados 9.3 y 9.7 y en el Anexo D de la versión 4 del TFM. El cambio de MariaDB a MySQL (`DEC-05`) y los repositorios separados (`DEC-03`) todavía no; ver §22.3.
+> **Alineación con el TFM:** `DEC-02`, `DEC-04` y `DEC-09` ya están reflejadas en los apartados 9.3 y 9.7 y en el Anexo D de la versión 4 del TFM. Los repositorios separados (`DEC-03`) todavía no. Con la v0.9, el TFM puede mantener MariaDB como motor (`DEC-05`); ver §22.3.
 
 ---
 
@@ -104,7 +105,7 @@ Además, el MVP incluye el **núcleo** (multiempresa, usuarios, cuatro roles, im
 | SO | Debian 13 |
 | Web | Apache 2.4 con `mod_rewrite`, `mod_headers`, `mod_ssl` |
 | PHP | 8.4 |
-| BD | MySQL 8.4 LTS, base y usuario exclusivos (ver §3.5) |
+| BD | MariaDB 11.8 LTS ya instalado en el servidor (compartido con otras aplicaciones), base y usuario exclusivos (ver §3.5) |
 | SSL | Let's Encrypt vía Certbot |
 | DNS | GoDaddy |
 
@@ -120,26 +121,25 @@ Ambos comparten el dominio registrable `hermantorres.com`, por lo que la cookie 
 ### 3.3 Convivencia con otros sitios del VPS
 
 - `RNF-001` (M) Solo se crean los vhosts propios (`pymehub-web.conf`, `pymehub-api.conf` y sus `-le-ssl.conf`); no se toca otro vhost ni la configuración global.
-- `RNF-002` (M) Base de datos y usuario propios (`pymehub` / `pymehub_user`) con privilegios solo sobre esa base, autenticación `caching_sha2_password` (la predeterminada de MySQL 8.4).
+- `RNF-002` (M) Base de datos y usuario propios (`pymehub` / `pymehub_user`) con privilegios solo sobre esa base. Se usa el método de autenticación predeterminado del motor (`mysql_native_password` o `ed25519` en MariaDB, `caching_sha2_password` en MySQL 8.4); `pdo_mysql` admite todos ellos.
 - `RNF-003` (M) Ajustes de PHP por `php_admin_value` en el vhost, no en `php.ini` global.
 
 ### 3.4 Extensiones PHP requeridas
 
 `pdo_mysql`, `mbstring`, `json`, `openssl`, `sodium`, `fileinfo`, `intl`, `curl` (esta última, necesaria para el proveedor de IA).
 
-### 3.5 MySQL 8.4 LTS en Debian 13
+### 3.5 Motor de base de datos: MariaDB 11.8 LTS o MySQL 8.4 LTS
 
-- `RNF-008` (M) Motor: **MySQL Community Server 8.4 LTS**, instalado desde el repositorio APT oficial de Oracle (`mysql-apt-config`, opción `mysql-8.4-lts`). Debian 13 no trae MySQL en sus repositorios (trae MariaDB) y Oracle no publica MySQL 8.0 para Debian 13.
-- `RNF-009` (M) El SQL del proyecto es **compatible con MySQL 8.4**: tipo `JSON` nativo, restricciones `CHECK`, `utf8mb4_0900_ai_ci`, funciones de ventana si hacen falta. No se usa sintaxis exclusiva de MariaDB. Las migraciones se prueban contra MySQL 8.4 antes de cada despliegue.
-- `RNF-010b` (M) `sql_mode` estricto (`STRICT_TRANS_TABLES`, `ONLY_FULL_GROUP_BY`, `NO_ZERO_DATE`, `ERROR_FOR_DIVISION_BY_ZERO`) fijado por la propia conexión PDO al abrirse, sin depender de la configuración global del servidor.
+- `RNF-008` (M) Motores admitidos: **MariaDB 11.4.5 o superior** (producción: MariaDB 11.8 LTS, el paquete de Debian 13) y **MySQL Community Server 8.4 LTS o superior**. En producción se usa el MariaDB que ya existe en el VPS: no se sustituye, no se instala otro motor en paralelo y no se toca su configuración global (`RNF-001`). El instalador detecta el motor y la versión con `SELECT VERSION()` y guarda el motor en `config.php` (`db.engine`).
+- `RNF-009` (M) **SQL del subconjunto común de MySQL 8.4 y MariaDB 11.8.**
+  - Prohibido: `->`/`->>`, `JSON_TABLE`, `LATERAL`, `ANY_VALUE`, `REGEXP_LIKE`, `UUID_TO_BIN`/`BIN_TO_UUID`, `MEMBER OF`, `VALUES ROW`, `INSERT … AS alias … ON DUPLICATE KEY`, índices funcionales y `DEFAULT (expresión)` salvo en columnas compatibles.
+  - Prohibido también un `GROUP BY` que dependa de la dependencia funcional: se agrupa siempre por todas las columnas no agregadas.
+  - Las funciones JSON se usan solo si existen en los dos motores. `SHOW …` no se usa con parámetros en sentencias preparadas.
+  - Las migraciones publicadas no se editan. Si el servidor no tiene `utf8mb4_0900_ai_ci`, el migrador usa en tiempo de ejecución `utf8mb4_uca1400_ai_ci` (MariaDB).
+  - Cada migración se prueba contra MariaDB 11.8 y MySQL 8.4 antes de publicarse.
+- `RNF-010b` (M) `sql_mode` estricto (`STRICT_TRANS_TABLES`, `ONLY_FULL_GROUP_BY`, `NO_ZERO_DATE`, `ERROR_FOR_DIVISION_BY_ZERO`) fijado por la propia conexión PDO al abrirse, sin depender de la configuración global del servidor. Todos esos modos existen en los dos motores.
 
-> **Riesgo de convivencia (`P-11`, bloqueante para la fase 1).** El VPS comparte servidor con otro sitio en producción. Los paquetes de MySQL y de MariaDB **no pueden convivir** en el mismo sistema. Antes de instalar nada hay que comprobar qué motor hay con `mysql --version` (o `mariadb --version`):
->
-> | Resultado | Qué hacer |
-> |---|---|
-> | Ya es MySQL 8.4 | Usarlo: solo se crean la base y el usuario del proyecto |
-> | Es MariaDB y el otro sitio lo usa | **No sustituirlo sin coordinarlo**: migrar el motor afecta al otro sitio. Opciones: (a) migrar todo el servidor a MySQL 8.4 en una ventana pactada, con copia completa y prueba previa del otro sitio; (b) contratar un VPS o una base de datos MySQL gestionada para Pyme Hub |
-> | No hay motor instalado | Instalar MySQL 8.4 LTS desde el repositorio oficial |
+> **`P-11` cerrado (v0.9).** El VPS (`srv1616185`, Debian 13) tiene MariaDB 11.8.6, que comparten otras aplicaciones. Ya existen la base `pymehub` (vacía) y el usuario `pymehub_user`. Pyme Hub se instala sobre ese MariaDB sin cambiar nada global. El procedimiento de producción está en el manual `02_DESPLIEGUE_VPS_PRODUCCION.md`.
 
 ---
 
@@ -149,7 +149,7 @@ Ambos comparten el dominio registrable `hermantorres.com`, por lo que la cookie 
 
 | Repositorio | Contenido | Despliegue | Depende de |
 |---|---|---|---|
-| `pymehub_api` | Backend tipo API: PHP 8.4, migraciones MySQL, instalador, tareas programadas, especificación OpenAPI | `/var/www/pymehub-api` → `api.pymehub.hermantorres.com` | MySQL 8.4 y, opcionalmente, Mistral AI |
+| `pymehub_api` | Backend tipo API: PHP 8.4, migraciones SQL, instalador, tareas programadas, especificación OpenAPI | `/var/www/pymehub-api` → `api.pymehub.hermantorres.com` | MariaDB 11.8 o MySQL 8.4 y, opcionalmente, Mistral AI |
 | `pymehub_web` | Frontend: PWA en HTML, CSS y JavaScript nativo, sin código de servidor | `/var/www/pymehub-web` → `pymehub.hermantorres.com` | **Solo de la API**, a través de HTTPS |
 
 - `RNF-006` (M) Cada repositorio tiene su `README.md` (instalación, configuración, despliegue), su `CHANGELOG.md`, su numeración SemVer y sus propias etiquetas de versión. Ningún repositorio contiene código del otro.
@@ -180,7 +180,7 @@ pymehub_api/
 │   ├── config.example.php    ← versionado
 │   ├── config.php            ← generado por el instalador, NO versionado
 │   └── risk_rules.php
-├── migrations/               ← 0001_init.sql … (MySQL 8.4)
+├── migrations/               ← 0001_init.sql … (MariaDB 11.8 y MySQL 8.4)
 ├── install/
 ├── cli/
 ├── storage/                  ← logs/, uploads/, ai_cache/ (NO versionado)
@@ -857,7 +857,9 @@ Coincidencia visual general con el mockup; funciona en escritorio, tableta y mó
 ### 17.1 Asistente de instalación
 
 - `RF-090` (M) Comprueba PHP, extensiones, permisos y `mod_rewrite`.
-- `RF-091` (M) Pide credenciales de MySQL, comprueba que el servidor es **MySQL 8.4 o superior** (si detecta MariaDB u otra versión, se detiene con un mensaje claro), prueba la conexión y aplica migraciones.
+- `RF-091` (M) Pide las credenciales de la base de datos (servidor, puerto o socket Unix) y prueba la conexión. Si falla, explica la diferencia entre `'usuario'@'localhost'` (socket) y `'usuario'@'127.0.0.1'` (TCP).
+  - Detecta el motor y exige **MariaDB 11.4.5 o superior** o **MySQL 8.4.0 o superior**. Si no se cumple, se detiene con un mensaje que indica el motor y la versión detectados y el mínimo exigido.
+  - Comprueba que existe la collation de las migraciones (o su equivalente en MariaDB) y que la base está vacía. Solo entonces aplica las migraciones y guarda `db.engine` en `config.php`.
 - `RF-092` (M) Genera `config.php` con claves aleatorias y crea el primer usuario `ADMIN` del interlocutor `PLATAFORMA`.
 - `RF-093` (M) Paso opcional de IA: clave de Mistral, prueba de conexión y modo (`live` / `cache_first` / `offline`). Sin clave, queda en `offline`.
 - `RF-094` (M) Opción de cargar datos de demostración (§18).
@@ -942,7 +944,7 @@ En `https://pymehub.hermantorres.com`:
 14. El monitor externo registra `/v1/health` y el modo mantenimiento muestra el aviso en la app.
 15. La exportación completa de una empresa de prueba se genera y su baja la deja en solo lectura.
 16. Las cinco pantallas del Anexo D se pueden capturar con los datos de demostración.
-17. El instalador rechaza un servidor que no sea MySQL 8.4 o superior, y las migraciones se ejecutan sin errores en MySQL 8.4.
+17. El instalador acepta MariaDB 11.8 y MySQL 8.4, y rechaza versiones por debajo del mínimo (por ejemplo, MariaDB 10.11). Las migraciones se ejecutan sin errores en los dos motores.
 18. `pymehub_web` desplegado en otro servidor estático funciona igual apuntando a la misma API (prueba de independencia de repositorios).
 19. Se cumplen los criterios de aceptación visual de §13.8.
 
@@ -954,7 +956,7 @@ Este plan cubre solo la construcción del MVP durante el TFM. El cronograma del 
 
 | Fase | Contenido | Entregable verificable |
 |---|---|---|
-| 0. Preparación | Resolver `P-11` (motor de base de datos), crear los dos repositorios, `README`, `.gitignore`, OpenAPI inicial | Repositorios creados; MySQL 8.4 operativo |
+| 0. Preparación | Resolver `P-11` (motor de base de datos), crear los dos repositorios, `README`, `.gitignore`, OpenAPI inicial | Repositorios creados; base de datos operativa (MariaDB 11.8 en producción) |
 | 1. Núcleo | `Core/`, router, errores, instalador, migración inicial, vhosts, SSL | `GET /v1/health` en producción |
 | 2. Identidad | Login, sesión, CSRF, cuatro roles, tenants, planes, invitaciones | Login de los cuatro roles; `PlanGate`; criterio 13 |
 | 3. Organización | Equipos, empleados, CSV, incidencias | Gerente gestiona su plantilla |
@@ -982,6 +984,7 @@ Este plan cubre solo la construcción del MVP durante el TFM. El cronograma del 
 | `P-06` | TFM alineado en sus versiones 3 y 4 (arquitectura, MVP, Anexo D y cronograma en el Anexo F); lo que falta está en §22.3 |
 | `P-07` | La cuenta de Mistral la crea y custodia Herman Adrian Torres (herman.adrian.torres@gmail.com). La clave se introduce solo en el instalador (`RF-093`) y nunca se comparte por chat ni se sube a ningún repositorio |
 | `P-09` | IA acotada a una única funcionalidad: Asesor de formación para el empleado; perfiles de demo en §12.6 |
+| `P-11` | El VPS tiene MariaDB 11.8.6 compartido con otras aplicaciones: Pyme Hub se instala sobre él (`DEC-05` v0.9, §3.5); la API es compatible con MariaDB 11.8 y MySQL 8.4 |
 
 ### 22.2 Pendientes
 
@@ -989,7 +992,6 @@ Este plan cubre solo la construcción del MVP durante el TFM. El cronograma del 
 |---|---|---|
 | `P-08` | ¿Los resultados de las encuestas de campo del TFM confirman o matizan F1–F7? | Aplazado |
 | `P-10` | Validar la división de permisos entre gerente y RR. HH. propuesta en §6.1 | Abierto |
-| `P-11` | ¿Qué motor de base de datos tiene hoy el VPS (`mysql --version`) y lo usa el otro sitio? Decide cómo se instala MySQL 8.4 (§3.5) | **Bloqueante para la fase 1** |
 | `P-12` | Color del sidebar: el manual de marca dice "navegación carbón" (#1F2937) y el de maquetación y los mockups usan navy (#08263B). Propuesta: navy, que es el aprobado en los mockups | Abierto |
 | `P-13` | Logotipo vectorial (SVG) y kit de marca del apartado 10 del manual | Abierto |
 | `P-14` | ¿Se quiere un módulo "Reportes" en el MVP o basta la exportación CSV por vista? | Abierto |
@@ -1005,6 +1007,6 @@ Este plan cubre solo la construcción del MVP durante el TFM. El cronograma del 
 | Anexo D, D.6 (Tabla D3) | Añadir las filas de operación (`RNF-060` a `RNF-065`, `RF-110` y `RF-111`), cumplimiento (`LEG-015` a `LEG-017`) y línea base (`RF-037`); el rango de instalación pasa a `RF-090` a `RF-096` |
 | 2.4 AI Act | Remitir a `LEG-015` como la revisión de sesgos que el texto ya promete |
 | 9.8 Políticas | Indicar que la disponibilidad, la monitorización, el mantenimiento y la baja están implementados en el MVP (§17.4) |
-| 3.4 (Hito 2), 9.3, 9.7, Anexo D (Figura D1 y D.2) y glosario 16.1 | **MariaDB → MySQL 8.4 LTS** (el glosario puede seguir diciendo "MySQL") |
+| 3.4 (Hito 2), 9.3, 9.7, Anexo D (Figura D1 y D.2) y glosario 16.1 | Pueden mantener **MariaDB** como motor (producción usa MariaDB 11.8, `DEC-05` v0.9); conviene añadir que la API también es compatible con MySQL 8.4 |
 | 9.3 y 9.7 | Añadir que backend y frontend están en **repositorios separados** y que el frontend solo consume la API |
 | Anexo D, D.8 | Las capturas deben tomarse con la interfaz final ajustada a §13, no con los mockups |

@@ -5,17 +5,18 @@ namespace PymeHub\Install;
 
 use PDO;
 use PymeHub\Core\Db;
+use PymeHub\Core\DbEngine;
 use PymeHub\Core\Migrator;
 use PymeHub\Core\Request;
 
 /**
  * Asistente de instalación (RF-090 a RF-095).
  * Disponible solo mientras no exista storage/installed.lock.
+ * RF-091 (DEC-05): admite MySQL ≥ 8.4.0 y MariaDB ≥ 11.4.5.
  */
 final class Installer
 {
     private const PHP_MIN    = '8.3.0';
-    private const MYSQL_MIN  = '8.4.0';
     private const EXTENSIONS = ['pdo_mysql', 'mbstring', 'json', 'openssl', 'sodium', 'fileinfo', 'intl', 'curl'];
 
     private string $tokenFile;
@@ -72,7 +73,7 @@ final class Installer
         $https = (($_SERVER['HTTPS'] ?? '') !== '' && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
         $host = (string) ($_SERVER['HTTP_HOST'] ?? 'api.pymehub.hermantorres.com');
         return [
-            'db_host' => '127.0.0.1', 'db_port' => '3306', 'db_name' => 'pymehub', 'db_user' => 'pymehub_user', 'db_pass' => '',
+            'db_host' => '127.0.0.1', 'db_port' => '3306', 'db_socket' => '', 'db_name' => 'pymehub', 'db_user' => 'pymehub_user', 'db_pass' => '',
             'api_url' => ($https ? 'https://' : 'http://') . $host,
             'frontend_url' => 'https://pymehub.hermantorres.com',
             'cookie_domain' => '',
@@ -118,29 +119,37 @@ final class Installer
             return;
         }
 
-        $db = ['host' => $in['db_host'], 'port' => (int) $in['db_port'], 'name' => $in['db_name'], 'user' => $in['db_user'], 'pass' => $in['db_pass']];
+        $db = ['host' => $in['db_host'], 'port' => (int) $in['db_port'], 'socket' => $in['db_socket'], 'name' => $in['db_name'], 'user' => $in['db_user'], 'pass' => $in['db_pass']];
         try {
             $pdo = Db::connect($db);
         } catch (\Throwable $e) {
-            $this->render($checks, ['No se pudo conectar con MySQL: ' . $e->getMessage()], $in);
+            $this->render($checks, [
+                'No se pudo conectar con la base de datos: ' . $e->getMessage(),
+                'Si el usuario está creado como \'' . $in['db_user'] . '\'@\'localhost\', usa «localhost» como servidor (o la ruta del socket); si está creado para \'127.0.0.1\', usa 127.0.0.1.',
+            ], $in);
             return;
         }
 
-        // RF-091: debe ser MySQL 8.4 o superior, nunca MariaDB
-        $version = (string) $pdo->query('SELECT VERSION()')->fetchColumn();
-        $numeric = preg_replace('/[^0-9.].*$/', '', $version);
-        if (stripos($version, 'mariadb') !== false) {
-            $this->render($checks, ["El servidor es MariaDB ($version). Pyme Hub requiere MySQL 8.4 LTS."], $in);
+        // RF-091 (DEC-05): MySQL 8.4 o superior, o MariaDB 11.4.5 o superior
+        $motor = DbEngine::detect($pdo);
+        $nombreMotor = DbEngine::label($motor['engine']);
+        $allowDev = $motor['engine'] === 'mysql' && getenv('PYMEHUB_PERMITIR_MYSQL80') === '1' && version_compare($motor['version'], '8.0.16', '>=');
+        if (!DbEngine::supported($motor) && !$allowDev) {
+            $this->render($checks, [sprintf(
+                'Se ha detectado %s %s (%s). Pyme Hub necesita %s %s o superior (o %s %s o superior).',
+                $nombreMotor, $motor['version'], $motor['raw'], $nombreMotor, DbEngine::minimum($motor['engine']),
+                $motor['engine'] === 'mariadb' ? 'MySQL' : 'MariaDB', DbEngine::minimum($motor['engine'] === 'mariadb' ? 'mysql' : 'mariadb')
+            )], $in);
             return;
         }
-        $allowDev = getenv('PYMEHUB_PERMITIR_MYSQL80') === '1' && version_compare($numeric, '8.0.16', '>=');
-        if (version_compare($numeric, self::MYSQL_MIN, '<') && !$allowDev) {
-            $this->render($checks, ["MySQL $version no es compatible: se requiere " . self::MYSQL_MIN . ' o superior.'], $in);
+        // La collation de las migraciones debe existir (o su equivalente en MariaDB) antes de crear nada
+        if (DbEngine::collationFor($pdo, $motor) === null) {
+            $this->render($checks, [sprintf('%s %s no tiene la collation %s ni una equivalente. No se ha creado nada.', $nombreMotor, $motor['version'], DbEngine::COLLATION)], $in);
             return;
         }
         $tables = (int) $pdo->query('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE()')->fetchColumn();
         if ($tables > 0) {
-            $this->render($checks, ['La base de datos no está vacía. Usa una base nueva o vacíala antes de instalar.'], $in);
+            $this->render($checks, ["La base de datos «{$in['db_name']}» no está vacía ($tables tablas). Usa una base nueva o vacíala antes de instalar."], $in);
             return;
         }
 
@@ -163,7 +172,7 @@ final class Installer
                 'api_url'      => $in['api_url'],
                 'frontend_url' => $in['frontend_url'],
             ],
-            'db' => $db,
+            'db' => $db + ['engine' => $motor['engine']], // mariadb | mysql
             'session' => [
                 'cookie_domain' => $in['cookie_domain'],
                 'cookie_secure' => $in['cookie_secure'] === '1',
@@ -227,17 +236,19 @@ final class Installer
 
         echo self::layout('Instalar Pyme Hub API', <<<HTML
 <h1>Instalar Pyme Hub API</h1>
-<p class="lead">Este asistente crea el esquema en MySQL, el administrador de la plataforma y el archivo de configuración. Solo se puede ejecutar una vez.</p>
+<p class="lead">Este asistente crea el esquema en la base de datos, el administrador de la plataforma y el archivo de configuración. Solo se puede ejecutar una vez.</p>
 {$errHtml}
 <section><h2>1. Comprobación del servidor</h2>
 <table><thead><tr><th>Requisito</th><th>Detalle</th><th>Estado</th></tr></thead><tbody>{$rows}</tbody></table></section>
 <form method="post" action="/install" autocomplete="off">
 <input type="hidden" name="_token" value="{$token}">
-<section><h2>2. Base de datos MySQL 8.4</h2>
-<p class="hint">La base y el usuario deben existir y la base debe estar vacía (ver manual de despliegue, apartado 5).</p>
+<section><h2>2. Base de datos MySQL 8.4 / MariaDB 11.8</h2>
+<p class="hint">La base y el usuario deben existir y la base debe estar vacía (manual 01, apartado 6). Motores admitidos: MySQL 8.4 o superior y MariaDB 11.4.5 o superior.</p>
+<p class="hint">Servidor: usa <code>127.0.0.1</code> si el usuario está creado como <code>'usuario'@'127.0.0.1'</code> (conexión TCP), o <code>localhost</code> si está creado como <code>'usuario'@'localhost'</code> (conexión por socket). En MariaDB con <code>skip-name-resolve</code> no son equivalentes. El socket es opcional: déjalo vacío para usar el de PHP por defecto.</p>
 <div class="grid">
 <label>Servidor<input name="db_host" required value="{$e($v['db_host'])}"></label>
 <label>Puerto<input name="db_port" required inputmode="numeric" value="{$e($v['db_port'])}"></label>
+<label>Socket Unix (opcional)<input name="db_socket" placeholder="/run/mysqld/mysqld.sock" value="{$e($v['db_socket'])}"></label>
 <label>Base de datos<input name="db_name" required value="{$e($v['db_name'])}"></label>
 <label>Usuario<input name="db_user" required value="{$e($v['db_user'])}"></label>
 <label>Contraseña<input name="db_pass" type="password" value=""></label>

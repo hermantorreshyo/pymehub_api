@@ -1,9 +1,11 @@
 # Manual 01 · Despliegue de Pyme Hub
 
-**Aplica a:** `pymehub_api` 0.1.0 y `pymehub_web` (cuando esté disponible)
-**Entorno:** VPS Hostinger · Debian 13 · Apache 2.4 · PHP 8.4 · MySQL 8.4 LTS · sin Docker
+**Aplica a:** `pymehub_api` 0.3.1 y `pymehub_web` 0.3.0
+**Entorno:** VPS Hostinger · Debian 13 · Apache 2.4 · PHP 8.4 · **MariaDB 11.8 LTS** (o MySQL 8.4 LTS) · sin Docker
 **Dominios:** `api.pymehub.hermantorres.com` (API) y `pymehub.hermantorres.com` (web)
-**Última revisión:** 03/10/2026
+**Última revisión:** 12/10/2026 (compatibilidad con MariaDB 11.8, `DEC-05`)
+
+> El procedimiento concreto del VPS de producción (`srv1616185`), con su MariaDB compartido, está en el **manual 02** (`02_DESPLIEGUE_VPS_PRODUCCION.md`). Este manual es la referencia general para cualquier servidor.
 
 ---
 
@@ -34,7 +36,7 @@ Los comandos usan estos valores; cámbialos si los tuyos son distintos:
 flowchart LR
     U[Navegador o móvil] -->|HTTPS| W[pymehub.hermantorres.com<br/>Apache · archivos estáticos<br/>/var/www/pymehub-web]
     U -->|HTTPS · fetch con cookie| A[api.pymehub.hermantorres.com<br/>Apache · PHP 8.4<br/>/var/www/pymehub-api/public]
-    A --> D[(MySQL 8.4<br/>base pymehub)]
+    A --> D[(MariaDB 11.8 o MySQL 8.4<br/>base pymehub)]
     A -. solo datos no personales .-> M[Mistral AI]
     C[cron] --> A
     UR[Monitor externo] -->|cada 5 min| H[/v1/health/]
@@ -53,63 +55,59 @@ La web no tiene código de servidor: solo descarga HTML, CSS y JavaScript, y tod
 
 ---
 
-## 4. Paso 0 · Comprobar el motor de base de datos (bloqueante)
+## 4. Paso 0 · Comprobar el motor de base de datos
 
-Pyme Hub exige **MySQL 8.4 LTS**. Debian 13 trae MariaDB en sus repositorios, y **MySQL y MariaDB no pueden instalarse a la vez** en el mismo sistema. Antes de nada:
+Pyme Hub funciona sobre **MariaDB 11.4.5 o superior** (recomendado 11.8 LTS, el de Debian 13) y sobre **MySQL 8.4 LTS o superior** (`DEC-05`, `RNF-008`). **No sustituyas ni reconfigures un motor que ya usen otras aplicaciones**: Pyme Hub solo necesita su propia base y su propio usuario.
 
 ```bash
-mysql --version 2>/dev/null || mariadb --version 2>/dev/null || echo "Sin motor instalado"
+mariadb --version 2>/dev/null || mysql --version 2>/dev/null || echo "Sin motor instalado"
 systemctl list-units --type=service | grep -Ei 'mysql|mariadb'
 ```
 
 | Resultado | Qué hacer |
 |---|---|
-| `mysql  Ver 8.4.x ... (MySQL Community Server ...)` | Continúa en el apartado 6. |
-| `Sin motor instalado` | Instala MySQL 8.4 (apartado 5). |
-| Cualquier versión de **MariaDB** | **Detente.** Otro sitio del servidor probablemente la usa. Las dos salidas seguras son: (a) migrar todo el servidor a MySQL 8.4 en una ventana pactada, con copia completa y prueba previa del otro sitio, o (b) usar un servidor o una base de datos MySQL gestionada aparte para Pyme Hub. No desinstales MariaDB sin esa decisión. |
-| MySQL 8.0 o inferior | Actualiza a 8.4 en una ventana pactada, con copia previa de todas las bases. |
+| MariaDB **11.4.5 o superior** (p. ej. `11.8.6-MariaDB-0+deb13u1`) | Úsalo. Continúa en el apartado 6. |
+| MySQL **8.4.x o superior** | Úsalo. Continúa en el apartado 6. |
+| `Sin motor instalado` | Instala MariaDB 11.8 desde Debian 13 (apartado 5). |
+| MariaDB 10.x u 11.0–11.4.4, o MySQL 8.0 | Versión no admitida: el instalador la rechaza. Actualiza en una ventana pactada, con copia previa de todas las bases, o usa otro servidor. |
+
+Comprueba también la collation de las migraciones (en MariaDB existe desde la 11.4.5):
+
+```bash
+sudo mariadb -e "SELECT CONVERT('a' USING utf8mb4) COLLATE utf8mb4_0900_ai_ci AS ok"   # con MySQL: sudo mysql -e …
+```
+
+Si responde `ok`, perfecto. Si da error, el migrador usa automáticamente la equivalente `utf8mb4_uca1400_ai_ci` en MariaDB. El instalador comprueba todo esto antes de crear nada.
 
 ---
 
-## 5. Instalar MySQL 8.4 LTS (solo si no hay motor)
+## 5. Instalar el motor (solo si no hay ninguno)
 
-Oracle publica MySQL 8.4 para Debian 13 en su repositorio APT oficial. MySQL 8.0 no está disponible para Debian 13.
+**Opción recomendada: MariaDB 11.8 LTS de Debian 13.**
 
-1. Descarga el paquete de configuración del repositorio desde la página oficial de descargas de MySQL (*MySQL APT Repository*), con la versión más reciente:
+```bash
+sudo apt update
+sudo apt install -y mariadb-server mariadb-client
+sudo mariadb-secure-installation
+mariadb --version          # 11.8.x
+systemctl is-active mariadb
+```
 
-   ```bash
-   cd /tmp
-   wget https://dev.mysql.com/get/mysql-apt-config_0.8.36-1_all.deb   # usa la versión vigente
-   sudo apt install ./mysql-apt-config_*_all.deb
-   ```
-
-   En el diálogo, deja **MySQL Server & Cluster → mysql-8.4-lts** y elige *Ok*.
-
-2. Instala y asegura el servidor:
-
-   ```bash
-   sudo apt update
-   sudo apt install -y mysql-server
-   sudo mysql_secure_installation
-   ```
-
-3. Comprueba:
-
-   ```bash
-   mysql --version          # debe mostrar 8.4.x
-   systemctl is-active mysql
-   ```
+**Alternativa: MySQL 8.4 LTS.** Se instala desde el repositorio APT oficial de Oracle (`mysql-apt-config`, opción `mysql-8.4-lts`). **No la instales si ya hay MariaDB**: los dos paquetes no pueden convivir en el mismo sistema.
 
 ---
 
 ## 6. Crear la base de datos y su usuario
 
+Si la base y el usuario ya existen (caso de producción, manual 02), comprueba solo los permisos y el host del usuario.
+
 ```bash
-sudo mysql
+sudo mariadb          # o: sudo mysql
 ```
 
 ```sql
 CREATE DATABASE pymehub CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+-- Elige el host según cómo se conectará la API (ver la nota de abajo)
 CREATE USER 'pymehub_user'@'localhost' IDENTIFIED BY 'UNA_CONTRASEÑA_LARGA_Y_ÚNICA';
 GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, REFERENCES, DROP, LOCK TABLES
    ON pymehub.* TO 'pymehub_user'@'localhost';
@@ -117,9 +115,20 @@ FLUSH PRIVILEGES;
 EXIT;
 ```
 
+Si la collation `utf8mb4_0900_ai_ci` no existe (apartado 4), crea la base con `utf8mb4_uca1400_ai_ci`.
+
+**Host del usuario y servidor en el instalador.** En MariaDB, con `skip-name-resolve`, `'pymehub_user'@'localhost'` y `'pymehub_user'@'127.0.0.1'` son cuentas distintas:
+
+| Usuario creado como | En el instalador, «Servidor» | Conexión |
+|---|---|---|
+| `'pymehub_user'@'localhost'` | `localhost` (y, si hace falta, el socket `/run/mysqld/mysqld.sock`) | Socket Unix |
+| `'pymehub_user'@'127.0.0.1'` | `127.0.0.1`, puerto `3306` | TCP |
+
+Para ver cómo está creado: `sudo mariadb -e "SELECT user, host FROM mysql.user WHERE user = 'pymehub_user'"`.
+
 Guarda la contraseña en tu gestor de contraseñas: la pedirá el asistente de instalación.
 
-**Comprobación:** `mysql -u pymehub_user -p pymehub -e "SELECT 1"` devuelve `1`.
+**Comprobación:** `mariadb -u pymehub_user -p pymehub -e "SELECT 1"` devuelve `1` (con `-h 127.0.0.1` si el usuario es de TCP).
 
 ---
 
@@ -414,9 +423,9 @@ Las tareas programadas usan la zona horaria del servidor. Si el VPS está en UTC
 
 ```bash
 sudo -u www-data /var/www/pymehub-api/cli/backup.sh
-sudo mysql -e "CREATE DATABASE pymehub_restore CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci"
-zcat "$(ls -1t /var/www/pymehub-api/storage/backups/db-*.sql.gz | head -1)" | sudo mysql pymehub_restore
-sudo mysql -e "SELECT COUNT(*) FROM pymehub_restore.usuario; DROP DATABASE pymehub_restore;"
+sudo mariadb -e "CREATE DATABASE pymehub_restore CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci"
+zcat "$(ls -1t /var/www/pymehub-api/storage/backups/db-*.sql.gz | head -1)" | sudo mariadb pymehub_restore
+sudo mariadb -e "SELECT COUNT(*) FROM pymehub_restore.usuario; DROP DATABASE pymehub_restore;"
 ```
 
 Copia también `storage/backups/` fuera del servidor periódicamente (por ejemplo, con `rsync` a tu equipo).
@@ -473,7 +482,7 @@ sudo -u pymehub git fetch --tags && sudo -u pymehub git checkout vX.Y.Z
 **Si una migración falla:** en MySQL los cambios de estructura se confirman de forma implícita, así que una migración no se deshace sola. Restaura la copia del paso 1, vuelve a la etiqueta anterior y revisa el error antes de reintentar:
 
 ```bash
-zcat "$(ls -1t /var/www/pymehub-api/storage/backups/db-*.sql.gz | head -1)" | sudo mysql pymehub
+zcat "$(ls -1t /var/www/pymehub-api/storage/backups/db-*.sql.gz | head -1)" | sudo mariadb pymehub
 cd /var/www/pymehub-api && sudo -u pymehub git checkout vVERSION_ANTERIOR
 ```
 
@@ -483,12 +492,15 @@ cd /var/www/pymehub-api && sudo -u pymehub git checkout vVERSION_ANTERIOR
 
 | Síntoma | Causa probable | Solución |
 |---|---|---|
-| `/install` muestra "MariaDB … requiere MySQL 8.4" | El servidor usa MariaDB | Apartado 4 |
+| `/install` dice "Se ha detectado MariaDB 10.x … necesita MariaDB 11.4.5 o superior" | Versión del motor no admitida | Apartado 4 |
+| `/install` dice "No se pudo conectar … Access denied for user 'pymehub_user'@'127.0.0.1'" | El usuario está creado para `localhost` (o al revés) | Usa el servidor que corresponda (apartado 6, tabla del host) |
+| `/install` dice "no tiene la collation utf8mb4_0900_ai_ci ni una equivalente" | Motor sin las collations necesarias | Actualiza a MariaDB 11.8 o MySQL 8.4 |
+| `cli/backup.sh` dice "no se encuentra mariadb-dump ni mysqldump" | Falta el cliente del motor | `sudo apt install mariadb-client` |
 | `/install` dice "La base de datos no está vacía" | Instalación anterior a medias | Vacía la base (`DROP DATABASE` y `CREATE DATABASE`) y repite |
 | Cualquier ruta devuelve 404 de Apache | `mod_rewrite` inactivo o `AllowOverride` no está en `All` | `sudo a2enmod rewrite`, revisa el vhost y recarga |
 | La web no mantiene la sesión | Cookie bloqueada | Comprueba HTTPS en ambos dominios, `cookie_secure` a `true` y que la URL del frontend en `config.php` coincide exactamente (sin barra final) |
 | Error de CORS en la consola del navegador | El origen de la web no está en `cors.allowed_origins` | Corrige `config/config.php` |
-| `PH-SYS-002` en todas las peticiones | MySQL caído o credenciales cambiadas | `systemctl status mysql` y revisa `config.php` |
+| `PH-SYS-002` en todas las peticiones | Base de datos caída o credenciales cambiadas | `systemctl status mariadb` (o `mysql`) y revisa `config.php` |
 | `/v1/health` en `degradado` con `copia_seguridad: antigua` | El cron de copias no se ejecuta | Revisa `crontab -l` del usuario `www-data` y `storage/logs/backup.log` |
 | `PH-AUTH-004` al iniciar sesión | 5 intentos fallidos en 15 minutos | Esperar 15 minutos |
 
@@ -496,14 +508,14 @@ cd /var/www/pymehub-api && sudo -u pymehub git checkout vVERSION_ANTERIOR
 
 ## 18. Lista de comprobación final
 
-- [ ] Motor de base de datos verificado (apartado 4) y MySQL 8.4 operativo.
+- [ ] Motor de base de datos verificado (apartado 4): MariaDB ≥ 11.4.5 (producción: 11.8) o MySQL ≥ 8.4.
 - [ ] Base `pymehub` y usuario `pymehub_user` con permisos solo sobre ella.
 - [ ] DNS de ambos subdominios resolviendo a la IP del VPS.
 - [ ] Vhosts activos, `configtest` correcto, otros sitios del servidor sin cambios.
 - [ ] HTTPS en ambos subdominios, con redirección desde HTTP.
 - [ ] Asistente completado, `/install` devuelve 404, `config.php` con permisos 640 y copia fuera del servidor.
 - [ ] `/v1/health` en `ok`.
-- [ ] Prueba de humo con 20 correctas (en entorno de pruebas).
+- [ ] Prueba de humo con 87 correctas (`tests/smoke_test.sh`).
 - [ ] Cron de copias activo y restauración probada.
 - [ ] Monitor externo configurado.
 - [ ] Notas A en securityheaders.com y SSL Labs.

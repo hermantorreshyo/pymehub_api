@@ -8,8 +8,10 @@ return [
         'frontend_url' => 'https://pymehub.hermantorres.com',
     ],
     'db' => [
-        'host' => '127.0.0.1',
+        'engine' => 'mariadb',     // mariadb | mysql (lo detecta el instalador, DEC-05)
+        'host' => '127.0.0.1',     // 'localhost' si el usuario está creado como 'usuario'@'localhost'
         'port' => 3306,
+        'socket' => '',            // opcional: ruta del socket Unix (p. ej. /run/mysqld/mysqld.sock)
         'name' => 'pymehub',
         'user' => 'pymehub_user',
         'pass' => 'CAMBIAR',
