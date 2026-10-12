@@ -2,6 +2,9 @@
 declare(strict_types=1);
 
 use PymeHub\Controllers\V1\AdminEmpresaController as Empresas;
+use PymeHub\Controllers\V1\AlertaController as Alertas;
+use PymeHub\Controllers\V1\BienestarController as Bienestar;
+use PymeHub\Controllers\V1\CheckinController as Checkins;
 use PymeHub\Controllers\V1\AuthController as AuthC;
 use PymeHub\Controllers\V1\EmpleadoController as Empleados;
 use PymeHub\Controllers\V1\EquipoController as Equipos;
@@ -20,6 +23,8 @@ return static function (Router $r): void {
     $admin   = Auth::require('ADMIN');
     $gerente = Auth::require('GERENTE');
     $gestion = Auth::require('GERENTE', 'RRHH');
+    $empleado = Auth::require('EMPLEADO');
+    $planBienestar = Auth::plan('bienestar');
 
     // Salud (pública)
     $r->add('GET', '/v1/health', [Health::class, 'show']);
@@ -60,4 +65,13 @@ return static function (Router $r): void {
     $r->add('POST',   '/v1/employees/{id}/invitation', [Empleados::class, 'invite'], [$gestion, $csrf]);
     $r->add('GET',    '/v1/employees/{id}/incidents', [Incidencias::class, 'index'], [$gestion]);
     $r->add('POST',   '/v1/employees/{id}/incidents', [Incidencias::class, 'store'], [$gestion, $csrf]);
+
+    // Bienestar (§8.6, fase 4)
+    $r->add('POST', '/v1/me/checkins', [Checkins::class, 'store'], [$empleado, $planBienestar, $csrf]);
+    $r->add('GET',  '/v1/me/checkins', [Checkins::class, 'index'], [$empleado, $planBienestar]);
+    $r->add('GET',  '/v1/wellbeing/summary', [Bienestar::class, 'summary'], [$gestion, $planBienestar]);
+
+    // Alertas (§8.4): bienestar en ambos planes; riesgo de rotación solo en Completo
+    $r->add('GET',   '/v1/alerts', [Alertas::class, 'index'], [$gestion]);
+    $r->add('PATCH', '/v1/alerts/{id}', [Alertas::class, 'update'], [$gestion, $csrf]);
 };

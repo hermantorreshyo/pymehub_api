@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Pyme Hub API
-  version: 0.2.0
+  version: 0.3.0
   description: |
     Contrato entre pymehub_api y pymehub_web (DEC-13).
     Autenticación por cookie de sesión HttpOnly. Toda petición que modifica datos
@@ -185,6 +185,103 @@ components:
         cambios: { type: integer }
         sin_cambios: { type: integer }
         errores: { type: array, items: { $ref: '#/components/schemas/ErrorCsv' } }
+    Checkin:
+      type: object
+      description: Check-in propio. La nota solo la recibe su autor (LEG-003).
+      properties:
+        fecha: { type: string, format: date }
+        animo: { type: integer, minimum: 1, maximum: 5 }
+        energia: { type: integer, minimum: 1, maximum: 5 }
+        estres: { type: integer, minimum: 1, maximum: 5, description: 5 = mucho estrés }
+        indice: { type: integer, minimum: 0, maximum: 100, description: 'Media de ánimo, energía y (6 − estrés), escalada a 0–100' }
+        nota: { type: [string, 'null'] }
+    Apoyo:
+      type: [object, 'null']
+      description: Mensaje de apoyo ante valores bajos (RF-055). Sin intervención automática.
+      properties:
+        mensaje: { type: string }
+        recursos:
+          type: array
+          items:
+            type: object
+            properties:
+              nombre: { type: string }
+              detalle: { type: string }
+              telefono: { type: [string, 'null'], example: '024' }
+    NivelBienestar:
+      type: string
+      enum: [BUENO, ATENCION, BAJO]
+      description: 'BUENO ≥ 65 · ATENCION 45–64 · BAJO < 45. Se muestra siempre con texto e icono (RNF-044).'
+    SemanaBienestar:
+      type: object
+      description: Por debajo del umbral de anonimato (5 personas) todos los valores y el recuento son null (LEG-002).
+      properties:
+        semana: { type: string, format: date, description: Lunes de la semana (hora de España) }
+        en_curso: { type: boolean }
+        disponible: { type: boolean }
+        participantes: { type: [integer, 'null'] }
+        indice: { type: [integer, 'null'] }
+        animo: { type: [number, 'null'] }
+        energia: { type: [number, 'null'] }
+        estres: { type: [number, 'null'] }
+    ResumenBienestar:
+      type: object
+      properties:
+        umbral_anonimato: { type: integer, example: 5 }
+        ambito:
+          type: object
+          properties:
+            tipo: { type: string, enum: [EMPRESA, EQUIPO] }
+            equipo_id: { type: [integer, 'null'] }
+            nombre: { type: string }
+        semanas: { type: array, items: { $ref: '#/components/schemas/SemanaBienestar' } }
+        actual:
+          type: [object, 'null']
+          description: Semana más reciente con datos suficientes; null si ninguna supera el umbral (PH-WB-001 en meta.aviso)
+          properties:
+            semana: { type: string, format: date }
+            en_curso: { type: boolean }
+            indice: { type: integer }
+            nivel: { $ref: '#/components/schemas/NivelBienestar' }
+            variacion: { type: [integer, 'null'], description: Puntos frente a la semana anterior con datos }
+            participantes: { type: integer }
+            plantilla: { type: integer, description: Empleados de alta en el ámbito }
+            animo: { type: number }
+            energia: { type: number }
+            estres: { type: number }
+        equipos:
+          type: array
+          description: Solo en la vista de empresa; últimas 4 semanas
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              nombre: { type: string }
+              disponible: { type: boolean }
+              participantes: { type: [integer, 'null'] }
+              indice: { type: [integer, 'null'] }
+              animo: { type: [number, 'null'] }
+              energia: { type: [number, 'null'] }
+              estres: { type: [number, 'null'] }
+              nivel: { oneOf: [{ $ref: '#/components/schemas/NivelBienestar' }, { type: 'null' }] }
+    Alerta:
+      type: object
+      properties:
+        id: { type: integer }
+        tipo: { type: string, enum: [BIENESTAR_EQUIPO, RIESGO_ROTACION, FORMACION_VENCIDA] }
+        entidad: { type: string, enum: [EQUIPO, USUARIO] }
+        entidad_id: { type: integer }
+        entidad_nombre: { type: [string, 'null'] }
+        severidad: { type: string, enum: [ALTA, MEDIA, BAJA] }
+        mensaje: { type: string }
+        estado: { type: string, enum: [ABIERTA, GESTIONADA, DESCARTADA] }
+        creado_en: { type: string, format: date-time }
+        gestion:
+          type: [object, 'null']
+          properties:
+            por: { type: [string, 'null'] }
+            en: { type: string, format: date-time }
+            nota: { type: [string, 'null'] }
 paths:
   /v1/health:
     get:
@@ -499,5 +596,146 @@ paths:
                 nota: { type: string, maxLength: 500 }
       responses:
         '201': { description: Registrada, content: { application/json: { schema: { $ref: '#/components/schemas/Incidencia' } } } }
+        '404': { description: PH-TENANT-001 }
+        '422': { description: PH-VAL-001 }
+  /v1/me/checkins:
+    post:
+      summary: Check-in del día (EMPLEADO · RF-050, RF-051)
+      description: |
+        Un check-in por día: repetirlo actualiza el del día (idempotente, apto para la cola sin conexión, RF-062).
+        `fecha` permite enviar un check-in hecho sin conexión hasta 3 días después. Voluntario (RF-056).
+        La nota se cifra en reposo y no se registra en ningún log.
+      security: [{ sesion: [], csrf: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [animo, energia, estres]
+              properties:
+                animo: { type: integer, minimum: 1, maximum: 5 }
+                energia: { type: integer, minimum: 1, maximum: 5 }
+                estres: { type: integer, minimum: 1, maximum: 5 }
+                nota: { type: string, maxLength: 500 }
+                fecha: { type: string, format: date, description: 'Por defecto, hoy (hora de España). No futura ni anterior a 3 días.' }
+      responses:
+        '201':
+          description: Creado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      checkin: { $ref: '#/components/schemas/Checkin' }
+                      actualizado: { type: boolean }
+                      apoyo: { $ref: '#/components/schemas/Apoyo' }
+        '200': { description: Actualizado el check-in del día (misma forma que 201) }
+        '403': { description: PH-PERM-001 (no es empleado) · PH-PLAN-001 · PH-AUTH-003 }
+        '422': { description: PH-VAL-001 }
+    get:
+      summary: Historial propio (EMPLEADO · RF-052)
+      security: [{ sesion: [] }]
+      parameters:
+        - { name: days, in: query, schema: { type: integer, default: 30, minimum: 7, maximum: 90 } }
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Checkin' } }
+                  meta:
+                    type: object
+                    properties:
+                      dias: { type: integer }
+                      hoy: { type: string, format: date }
+                      hecho_hoy: { type: boolean }
+                      respuestas: { type: integer }
+                      racha: { type: integer, description: Días seguidos con check-in }
+                      medias:
+                        type: [object, 'null']
+                        properties:
+                          animo: { type: number }
+                          energia: { type: number }
+                          estres: { type: number }
+                          indice: { type: integer }
+  /v1/wellbeing/summary:
+    get:
+      summary: Bienestar agregado y anónimo (GERENTE, RRHH · RF-053, LEG-002)
+      description: |
+        Medias semanales de la empresa o de un equipo. Nunca devuelve registros individuales ni notas.
+        Si ninguna semana llega a 5 personas, `data.actual` es null y `meta.aviso.code` = PH-WB-001.
+      security: [{ sesion: [] }]
+      parameters:
+        - { name: team_id, in: query, schema: { type: integer } }
+        - { name: weeks, in: query, schema: { type: integer, default: 8, minimum: 4, maximum: 26 } }
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/ResumenBienestar' }
+                  meta:
+                    type: object
+                    properties:
+                      semanas: { type: integer }
+                      desde: { type: string, format: date }
+                      hasta: { type: string, format: date }
+                      aviso:
+                        type: object
+                        properties:
+                          code: { type: string, example: PH-WB-001 }
+                          message: { type: string }
+        '403': { description: PH-PERM-001 · PH-PLAN-001 }
+        '404': { description: PH-TENANT-001 (equipo de otra empresa) }
+  /v1/alerts:
+    get:
+      summary: Alertas de la empresa (GERENTE, RRHH · §8.4)
+      description: Bienestar de equipo en ambos planes (RF-054); riesgo de rotación solo en el plan Completo (RF-033).
+      security: [{ sesion: [] }]
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [open, managed, dismissed, all], default: open } }
+        - { name: tipo, in: query, schema: { type: string, enum: [BIENESTAR_EQUIPO, RIESGO_ROTACION, FORMACION_VENCIDA] } }
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - { name: per_page, in: query, schema: { type: integer, default: 25, maximum: 100 } }
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Alerta' } }
+                  meta:
+                    allOf:
+                      - { $ref: '#/components/schemas/Paginacion' }
+                      - type: object
+                        properties:
+                          abiertas: { type: integer }
+  /v1/alerts/{id}:
+    patch:
+      summary: Gestionar una alerta (GERENTE, RRHH · LEG-005)
+      security: [{ sesion: [], csrf: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [estado]
+              properties:
+                estado: { type: string, enum: [GESTIONADA, DESCARTADA, ABIERTA] }
+                nota_gestion: { type: string, maxLength: 500 }
+      responses:
+        '200': { description: ok, content: { application/json: { schema: { $ref: '#/components/schemas/Alerta' } } } }
         '404': { description: PH-TENANT-001 }
         '422': { description: PH-VAL-001 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prueba de humo de Pyme Hub API (fases 0-3).
+# Prueba de humo de Pyme Hub API (fases 0-4).
 # Uso: tests/smoke_test.sh <URL_API> <ORIGEN_FRONTEND> <EMAIL_ADMIN> <PASSWORD_ADMIN>
 # Crea dos empresas de prueba con NIF y emails aleatorios. No usar en producción con datos reales.
 set -uo pipefail
@@ -135,6 +135,30 @@ send a PATCH "$CA" "/v1/admin/tenants/$EMP2" '{"limite_empleados":1}' > /dev/nul
 check "alta por encima del límite -> PH-TENANT-002" "$(send t POST "$CT" /v1/employees '{"nombre":"Leo","puesto":"OTRO","tipo_contrato":"ETT","turno":"TARDE","fecha_alta":"2024-01-15"}' | code)" "PH-TENANT-002"
 check "CSV por encima del límite -> PH-TENANT-002" "$(csv t "$CT" /v1/employees/import "$T/e2.csv" | code)" "PH-TENANT-002"
 check "simulación por encima del límite -> PH-TENANT-002" "$(csv t "$CT" '/v1/employees/import?simular=1' "$T/e2.csv" | code)" "PH-TENANT-002"
+
+echo "== Bienestar (fase 4)"
+TOKE=$(send h POST "$CH" "/v1/employees/$EID/invitation" "{\"email\":\"emp$R@prueba.test\"}" | jq_ "d['data']['enlace'].split('/')[-1]")
+curl -s -H "$J" "$B/v1/auth/invitations/accept" -d "{\"token\":\"$TOKE\",\"password\":\"Empleado#Seguro1\",\"acepta_privacidad\":true}" > /dev/null
+curl -s -c "$T/e" -H "$J" "$B/v1/auth/login" -d "{\"email\":\"emp$R@prueba.test\",\"password\":\"Empleado#Seguro1\"}" > "$T/el.json"
+check "login empleado" "$(jq_ "d['data']['usuario']['perfil']" < "$T/el.json")" "EMPLEADO"
+CE=$(jq_ "d['data']['csrf_token']" < "$T/el.json")
+check "check-in sin CSRF -> PH-AUTH-003" "$(curl -s -b "$T/e" -H "$J" "$B/v1/me/checkins" -d '{"animo":3,"energia":3,"estres":3}' | code)" "PH-AUTH-003"
+send e POST "$CE" /v1/me/checkins '{"animo":2,"energia":2,"estres":5,"nota":"Nota privada de prueba"}' > "$T/ck.json"
+check "check-in del día (RF-050)" "$(jq_ "d['data']['checkin']['indice']" < "$T/ck.json")" "17"
+check "valores bajos -> mensaje de apoyo (RF-055)" "$(jq_ "d['data']['apoyo']['recursos'][0]['telefono']" < "$T/ck.json")" "024"
+check "repetirlo actualiza el del día (RF-051)" "$(send e POST "$CE" /v1/me/checkins '{"animo":4,"energia":4,"estres":2,"nota":"Nota privada de prueba"}' | jq_ "str(d['data']['actualizado'])+' '+str(d['data']['apoyo'])")" "True None"
+check "historial propio con la nota descifrada (RF-052, LEG-003)" "$(curl -s -b "$T/e" "$B/v1/me/checkins?days=30" | jq_ "str(d['meta']['hecho_hoy'])+' '+d['data'][0]['nota']")" "True Nota privada de prueba"
+check "check-in de fecha futura -> PH-VAL-001" "$(send e POST "$CE" /v1/me/checkins '{"animo":3,"energia":3,"estres":3,"fecha":"2099-01-01"}' | code)" "PH-VAL-001"
+check "escala fuera de 1-5 -> PH-VAL-001" "$(send e POST "$CE" /v1/me/checkins '{"animo":0,"energia":3,"estres":3}' | code)" "PH-VAL-001"
+check "empleado no ve agregados -> PH-PERM-001" "$(curl -s -b "$T/e" "$B/v1/wellbeing/summary" | code)" "PH-PERM-001"
+check "gestión no hace check-in -> PH-PERM-001" "$(curl -s -b "$T/h" "$B/v1/me/checkins" | code)" "PH-PERM-001"
+curl -s -b "$T/h" "$B/v1/wellbeing/summary" > "$T/wb.json"
+check "una sola persona: aviso de anonimato PH-WB-001 (LEG-002)" "$(jq_ "d['meta']['aviso']['code']" < "$T/wb.json")" "PH-WB-001"
+check "por debajo del umbral no hay valores ni recuento" "$(jq_ "str(d['data']['actual'])+' '+str(d['data']['semanas'][-1]['indice'])+' '+str(d['data']['semanas'][-1]['participantes'])" < "$T/wb.json")" "None None None"
+check "equipo de otra empresa -> PH-TENANT-001" "$(curl -s -b "$T/t" "$B/v1/wellbeing/summary?team_id=$EQN" | code)" "PH-TENANT-001"
+check "alertas de la empresa" "$(curl -s -b "$T/h" "$B/v1/alerts" | jq_ "d['meta']['total']")" "0"
+check "gestionar alerta inexistente -> PH-TENANT-001" "$(send h PATCH "$CH" /v1/alerts/999999 '{"estado":"GESTIONADA"}' | code)" "PH-TENANT-001"
+check "empleado no ve alertas -> PH-PERM-001" "$(curl -s -b "$T/e" "$B/v1/alerts" | code)" "PH-PERM-001"
 
 echo "== Baja laboral"
 check "motivo no válido -> PH-VAL-001" "$(send h DELETE "$CH" "/v1/employees/$EID" "{\"fecha_baja\":\"$HOY\",\"motivo_baja\":\"DESPIDO\"}" | code)" "PH-VAL-001"

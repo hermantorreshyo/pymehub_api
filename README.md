@@ -15,7 +15,7 @@ public/        Única carpeta expuesta (front controller)
 src/           Núcleo, middlewares, controladores, servicios y repositorios
 migrations/    Esquema MySQL versionado
 install/       Asistente de instalación (/install, se bloquea tras usarse)
-cli/           Migraciones y copias de seguridad
+cli/           Migraciones, copias, tareas programadas y datos de demostración
 config/        config.example.php (el real lo genera el instalador y no se versiona)
 storage/       Logs, sesiones, subidas, copias (no se versiona)
 docs/          Manuales, modelo de datos y contrato OpenAPI
@@ -45,4 +45,4 @@ tests/smoke_test.sh http://127.0.0.1:8080 http://127.0.0.1:5500 admin@local.test
 
 ## Estado
 
-Versión **0.2.1** (documentación sobre la 0.2.0): núcleo, seguridad, instalación, empresas, cuentas de gestión e invitaciones (fases 1 y 2) y organización: equipos, empleados, importación CSV e incidencias (fase 3). El plan de construcción completo está en el documento de requisitos técnicos del MVP (§21).
+Versión **0.3.0**: núcleo, seguridad, instalación, empresas, cuentas de gestión e invitaciones (fases 1 y 2); organización: equipos, empleados, importación CSV e incidencias (fase 3); y bienestar: check-in, historial, agregados anónimos y alertas de equipo (fase 4). Incluye datos de demostración (`php cli/demo_seed.php --password=…`, manual 01, apartado 12.1). El plan de construcción completo está en el documento de requisitos técnicos del MVP (§21).

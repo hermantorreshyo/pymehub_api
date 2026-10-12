@@ -341,6 +341,31 @@ sudo cp /var/www/pymehub-api/config/config.php ~/config.pymehub.$(date +%F).php 
 
 ---
 
+### 12.1 Datos de demostración (defensa del TFM)
+
+Para la defensa, la API incluye un generador de datos **ficticios** (`LEG-009`). Crea dos empresas:
+- «Reparto Rápido Castilla S.L.»: plan Completo, 48 empleados y 4 equipos.
+- «Mensajería Tajo S.L.»: plan Entrada, 15 empleados y 2 equipos.
+
+También genera 60 días de check-ins, con el equipo Nocturno empeorando, y sus alertas.
+
+```bash
+cd /var/www/pymehub-api
+sudo -u www-data php cli/demo_seed.php --password='CONTRASEÑA-DE-LA-DEMO'          # crear
+sudo -u www-data php cli/demo_seed.php --password='CONTRASEÑA-DE-LA-DEMO' --reset  # regenerar desde cero
+sudo -u www-data php cli/demo_seed.php --borrar                                     # eliminarlos
+```
+
+| Usuario | Perfil | Empresa |
+|---|---|---|
+| `admin@pymehub.demo` | Administración de la plataforma | — |
+| `gerente@pymehub.demo` | Gerencia | Castilla (Completo) |
+| `rrhh@pymehub.demo` | RR. HH. | Castilla (Completo) |
+| `conductor@pymehub.demo` | Empleado (conductor de noche, 2 meses) | Castilla (Completo) |
+| `gerente2@pymehub.demo` | Gerencia | Tajo (Entrada) |
+
+Todos usan la contraseña indicada en `--password`, que no se guarda en ningún sitio: entrégala al tribunal por separado. Los datos son relativos al día en que se generan, así que conviene **regenerarlos la víspera de la defensa** con `--reset`. El conductor no tiene check-in de ese día, para hacerlo en directo.
+
 ## 13. Verificación
 
 ```bash
@@ -377,7 +402,13 @@ sudo -u www-data crontab -e
 
 ```cron
 0 2 * * * /var/www/pymehub-api/cli/backup.sh >> /var/www/pymehub-api/storage/logs/backup.log 2>&1
+# Retención de datos: check-ins de más de 12 meses (LEG-008) e invitaciones caducadas
+0 4 * * * php /var/www/pymehub-api/cli/purge_retention.php >> /var/www/pymehub-api/storage/logs/cron.log 2>&1
+# Alertas de bienestar de equipo, los lunes con la semana anterior completa (RF-054)
+0 6 * * 1 php /var/www/pymehub-api/cli/wellbeing_alerts.php >> /var/www/pymehub-api/storage/logs/cron.log 2>&1
 ```
+
+Las tareas programadas usan la zona horaria del servidor. Si el VPS está en UTC, `0 6 * * 1` son las 08:00 en verano y las 07:00 en invierno en España; es indiferente para el cálculo, que siempre usa semanas en hora de España.
 
 **Prueba la copia y la restauración antes de la defensa** (`RNF-064`):
 

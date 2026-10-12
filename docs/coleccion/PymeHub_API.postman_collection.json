@@ -2,7 +2,7 @@
   "info": {
     "name": "Pyme Hub API v1",
     "_postman_id": "a3d4c0e2-5b1f-5e7c-9d2a-3f6b8c1e0d47",
-    "description": "Colección de la API de Pyme Hub (MVP, TFM EUDE).\n\nUso: 1) importa también el entorno de docs/coleccion; 2) ejecuta 'Login' (guarda la cookie y el token CSRF); 3) las peticiones que modifican datos envían X-CSRF-Token: {{csrf}}.\nContrato completo: docs/openapi.yaml. Se amplía con cada avance.",
+    "description": "Colección de la API de Pyme Hub (MVP, TFM EUDE).\n\nUso: 1) importa también el entorno de docs/coleccion; 2) ejecuta 'Login' (guarda la cookie y el token CSRF); 3) las peticiones que modifican datos envían X-CSRF-Token: {{csrf}}.\nContrato completo: docs/openapi.yaml. Se amplía con cada avance (v0.3.0: bienestar y alertas).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -878,7 +878,208 @@
       ]
     },
     {
-      "name": "08 · Invitaciones (sin sesión)",
+      "name": "08 · Bienestar del empleado (EMPLEADO)",
+      "description": "Inicia sesión con un usuario EMPLEADO (en los datos de demo, conductor@pymehub.demo).",
+      "item": [
+        {
+          "name": "Check-in del día",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/me/checkins",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "me",
+                "checkins"
+              ]
+            },
+            "description": "RF-050/RF-051. Repetirlo actualiza el del día. 'fecha' opcional (hasta 3 días atrás, para la cola sin conexión). Con valores bajos devuelve 'apoyo' (RF-055).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"animo\": 4,\n  \"energia\": 3,\n  \"estres\": 2,\n  \"nota\": \"Buena ruta hoy\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Mi historial (30 días)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/me/checkins?days=30",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "me",
+                "checkins"
+              ],
+              "query": [
+                {
+                  "key": "days",
+                  "value": "30"
+                }
+              ]
+            },
+            "description": "RF-052. Incluye las notas propias descifradas, medias y racha."
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 · Bienestar y alertas (GERENTE, RRHH)",
+      "description": "Solo agregados con 5 personas o más (LEG-002). En los datos de demo: gerente@pymehub.demo.",
+      "item": [
+        {
+          "name": "Resumen de la empresa",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/wellbeing/summary?weeks=8",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "wellbeing",
+                "summary"
+              ],
+              "query": [
+                {
+                  "key": "weeks",
+                  "value": "8"
+                }
+              ]
+            },
+            "description": "RF-053. Si no hay datos suficientes, meta.aviso.code = PH-WB-001."
+          }
+        },
+        {
+          "name": "Resumen de un equipo",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/wellbeing/summary?team_id={{equipo_id}}&weeks=8",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "wellbeing",
+                "summary"
+              ],
+              "query": [
+                {
+                  "key": "team_id",
+                  "value": "{{equipo_id}}"
+                },
+                {
+                  "key": "weeks",
+                  "value": "8"
+                }
+              ]
+            },
+            "description": ""
+          }
+        },
+        {
+          "name": "Alertas abiertas",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/alerts?status=open",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "alerts"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "open"
+                }
+              ]
+            },
+            "description": "RF-054 (bienestar) y, con plan Completo, RF-033 (rotación)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const j = pm.response.json();",
+                  "try { pm.collectionVariables.set('alerta_id', j.data[0].id); } catch (e) {}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Marcar alerta como gestionada",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/alerts/{{alerta_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "alerts",
+                "{{alerta_id}}"
+              ]
+            },
+            "description": "LEG-005: el sistema solo avisa; la gestión es humana.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"GESTIONADA\",\n  \"nota_gestion\": \"Reunión con el equipo el lunes\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 · Invitaciones (sin sesión)",
       "item": [
         {
           "name": "Aceptar invitación",
@@ -917,7 +1118,7 @@
       ]
     },
     {
-      "name": "09 · Cerrar sesión",
+      "name": "11 · Cerrar sesión",
       "item": [
         {
           "name": "Logout",
@@ -981,6 +1182,10 @@
     },
     {
       "key": "token_invitacion",
+      "value": ""
+    },
+    {
+      "key": "alerta_id",
       "value": ""
     }
   ]
