@@ -9,7 +9,8 @@ Backend tipo API del MVP de Pyme Hub (TFM EUDE). El frontend es otro repositorio
 - `docs/manuales/`: manuales. El 01 es el de despliegue; actualízalo si cambia algo del despliegue.
 
 ## Reglas no negociables
-- PHP 8.4 sin frameworks ni Composer. MySQL 8.4 LTS (nunca sintaxis exclusiva de MariaDB). Apache. Sin Docker.
+- PHP 8.4 sin frameworks ni Composer. Apache. Sin Docker. Base de datos: **MariaDB 11.8 LTS (producción) o MySQL 8.4 LTS** (`DEC-05`).
+- SQL del subconjunto común de MySQL 8.4 y MariaDB 11.8 (`RNF-009`). Prohibido: `->`/`->>`, `JSON_TABLE`, `LATERAL`, `ANY_VALUE`, `REGEXP_LIKE`, `UUID_TO_BIN`/`BIN_TO_UUID`, `MEMBER OF`, `VALUES ROW`, `INSERT … AS alias … ON DUPLICATE KEY`, índices funcionales, `DEFAULT (expresión)` salvo en columnas compatibles, `SHOW …` con parámetros preparados, y `GROUP BY` que dependa de la dependencia funcional (agrupar siempre por todas las columnas no agregadas). Las funciones JSON, solo si existen en los dos motores.
 - Todos los actores en `interlocutor` (campo `tipo`); las personas en `usuario` (campo `perfil`). Un interlocutor tiene N usuarios. No crear tablas de actores paralelas.
 - Tablas y columnas en español, minúsculas y singular. Enumerados en mayúsculas con `CHECK` o catálogo.
 - Todo SQL en `src/Repositories` o servicios, siempre con PDO preparado. Acumulados actualizados de forma atómica en SQL.
@@ -22,7 +23,7 @@ Backend tipo API del MVP de Pyme Hub (TFM EUDE). El frontend es otro repositorio
 
 ## Antes de cada commit
 1. `find . -name "*.php" -exec php -l {} \;` sin errores.
-2. `tests/smoke_test.sh` en local: todas correctas. Amplíala con las comprobaciones del avance.
+2. `tests/smoke_test.sh` en local contra **MariaDB 11.8 y MySQL 8.4**: todas correctas. Amplíala con las comprobaciones del avance. Cada migración nueva se prueba en los dos motores.
 3. `CHANGELOG.md` y, si aplica, `docs/openapi.yaml` y manuales actualizados.
 
 ## Mensajes de commit

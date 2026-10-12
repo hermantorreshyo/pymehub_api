@@ -14,19 +14,18 @@ final class Db
 
     public static function connect(array $cfg): PDO
     {
-        $dsn = sprintf(
-            'mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4',
-            $cfg['host'],
-            (int) ($cfg['port'] ?? 3306),
-            $cfg['name']
-        );
+        // Conexión por socket Unix si se indica (db.socket) o TCP por host y puerto.
+        // Con host 'localhost' y sin socket, PDO usa el socket por defecto de PHP (pdo_mysql.default_socket).
+        $dsn = !empty($cfg['socket'])
+            ? sprintf('mysql:unix_socket=%s;dbname=%s;charset=utf8mb4', $cfg['socket'], $cfg['name'])
+            : sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4', $cfg['host'], (int) ($cfg['port'] ?? 3306), $cfg['name']);
         $pdo = new PDO($dsn, $cfg['user'], $cfg['pass'], [
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             PDO::ATTR_EMULATE_PREPARES   => false,
             PDO::ATTR_STRINGIFY_FETCHES  => false,
         ]);
-        // RNF-010b: modo estricto y UTC fijados por la propia conexión
+        // RNF-010b: modo estricto y UTC fijados por la propia conexión (válidos en MySQL 8.4 y MariaDB 11.8)
         $pdo->exec("SET SESSION sql_mode = 'STRICT_TRANS_TABLES,ONLY_FULL_GROUP_BY,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'");
         $pdo->exec("SET time_zone = '+00:00'");
         return $pdo;
