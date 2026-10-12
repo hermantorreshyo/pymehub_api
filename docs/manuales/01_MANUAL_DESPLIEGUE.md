@@ -448,6 +448,8 @@ Todos usan la contraseña indicada en `--password`, que no se guarda en ningún 
 
 **Asesor de formación con IA.** Con la clave de Mistral en `config.php` (`ia.api_key`, nunca en el repositorio), pregenera las respuestas de los perfiles de la demo para poder usar `ia.mode = offline` en la defensa: `sudo -u www-data php cli/ai_warmup.php`. Sin clave, el asesor responde por reglas («Recomendación automática sin IA»). El detalle está en el manual 02, apartado 8.1.
 
+**IA de RR. HH.** En Castilla hay 23 antiguos empleados (bajas de los últimos 12 meses), una puntuación de riesgo semanal desde el alta en Pyme Hub, 6 personas en riesgo alto con su alerta (una ya gestionada) y la línea base de los 12 meses anteriores. El conductor de la demo aparece en riesgo alto por su antigüedad, contrato y turno: el empleado nunca ve su propia puntuación. Tras cargar la demo, el cron de las 03:00 (`cli/recalc_risk.php`) añade la puntuación de cada día.
+
 Si el comando responde «Los datos de demostración ya existen», ya se cargaron antes: añade `--reset` para regenerarlos con la contraseña nueva.
 
 ## 13. Verificación
@@ -463,14 +465,14 @@ curl -s https://api.pymehub.hermantorres.com/install -o /dev/null -w "%{http_cod
 curl -s https://api.pymehub.hermantorres.com/config/config.php -o /dev/null -w "%{http_code}\n"   # 404
 ```
 
-**Prueba de humo.** `tests/smoke_test.sh` hace 130 comprobaciones (sesión, CSRF, perfiles, aislamiento entre empresas, organización, bienestar, formación, asesor de IA, CORS, bloqueo por fuerza bruta). Si no puede iniciar sesión como administrador se detiene y lo dice, en lugar de dar decenas de fallos. **Crea dos empresas y varios usuarios de prueba**, así que ejecútala en un entorno de pruebas, o en producción solo antes de cargar datos reales y borrando después lo creado:
+**Prueba de humo.** `tests/smoke_test.sh` hace 156 comprobaciones (sesión, CSRF, perfiles, aislamiento entre empresas, organización, bienestar, formación, asesor de IA, riesgo de rotación y línea base, CORS, bloqueo por fuerza bruta). Si no puede iniciar sesión como administrador se detiene y lo dice, en lugar de dar decenas de fallos. **Crea dos empresas y varios usuarios de prueba**, así que ejecútala en un entorno de pruebas, o en producción solo antes de cargar datos reales y borrando después lo creado:
 
 ```bash
 cd /var/www/hermantorres/eude/pymehub/pymehub_api
 bash tests/smoke_test.sh https://api.pymehub.hermantorres.com https://pymehub.hermantorres.com TU_EMAIL_ADMIN 'TU_CONTRASEÑA'
 ```
 
-Resultado esperado: `130 correctas, 0 fallidas`.
+Resultado esperado: `156 correctas, 0 fallidas`.
 
 **Web.** `curl -s -o /dev/null -w '%{http_code}\n' https://pymehub.hermantorres.com/` y `…/js/config.js` deben dar **200**. Un 403 en la raíz y 404 en `config.js` indican que el `DocumentRoot` del vhost no termina en `/public` (apartado 10.2; revisa también el `-le-ssl.conf`).
 
@@ -499,6 +501,10 @@ API=/var/www/hermantorres/eude/pymehub/pymehub_api
 0 4 * * *  www-data  php $API/cli/purge_retention.php >> $API/storage/logs/cron.log 2>&1
 # Alertas de bienestar de equipo, los lunes con la semana anterior completa (RF-054)
 0 6 * * 1  www-data  php $API/cli/wellbeing_alerts.php >> $API/storage/logs/cron.log 2>&1
+# Riesgo de rotación de las empresas con plan Completo y alertas de paso a nivel alto (RF-031, RF-033)
+0 3 * * *  www-data  php $API/cli/recalc_risk.php >> $API/storage/logs/cron.log 2>&1
+# Revisión de sesgos del motor de riesgo, cada trimestre (LEG-015)
+30 4 1 1,4,7,10 *  www-data  php $API/cli/bias_report.php --salida=$API/storage/logs/sesgos_$(date +\%Y\%m).md >> $API/storage/logs/cron.log 2>&1
 CRON
 sudo chmod 644 /etc/cron.d/pymehub
 systemctl is-active cron && cat /etc/cron.d/pymehub
@@ -613,7 +619,7 @@ cd /var/www/hermantorres/eude/pymehub/pymehub_api && sudo -u pymehub git checkou
 - [ ] HTTPS en ambos subdominios, con redirección desde HTTP.
 - [ ] Asistente completado, `/install` devuelve 404, `config.php` con permisos 640 y copia fuera del servidor.
 - [ ] `/v1/health` en `ok`.
-- [ ] Prueba de humo con 130 correctas (`tests/smoke_test.sh`).
+- [ ] Prueba de humo con 156 correctas (`tests/smoke_test.sh`).
 - [ ] La web responde 200 en `/` y en `js/config.js`, sin errores en la consola.
 - [ ] `/etc/cron.d/pymehub` activo, primera copia hecha (`copia_seguridad: ok`) y restauración probada.
 - [ ] Catálogo de formación con 15 módulos (`php cli/catalog_sync.php`).

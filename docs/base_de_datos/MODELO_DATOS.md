@@ -119,9 +119,9 @@ erDiagram
 | `asignacion_formativa` | Formación de cada empleado | Origen: gestión, autoinscripción o asesor de IA. Una por persona y módulo. `VENCIDA` se calcula al leer (no completada con la fecha límite pasada). Desde 0004: `bloque_actual` (retomar), `ultima_nota` y `ultimo_envio` (cuestionario idempotente desde la cola sin conexión) |
 | `preferencia_formativa` | Preferencias para el asesor | Solo las ve el empleado (LEG-014), que puede borrarlas; la gestión solo ve recuentos con 5 personas o más (IA-021). Objetivo con `CHECK` (0005) |
 | `checkin_bienestar` | Check-in diario | Nota cifrada; equipo guardado en el momento del check-in |
-| `puntuacion_riesgo` | Score de rotación | Histórico con factores y versión de reglas |
-| `alerta` | Alertas de rotación, bienestar y formación | |
-| `linea_base` | Rotación y absentismo previos al alta | RF-037 |
+| `puntuacion_riesgo` | Score de rotación (§9) | Una por persona y día desde 0006 (`fecha`, clave única `usuario_id + fecha`): el recálculo sustituye la del día y el cron de las 03:00 añade la siguiente. Guarda los factores (código, puntos, frase en lenguaje llano, evidencia y fuentes) y `version_reglas` (RF-032). Nunca datos de salud ni de bienestar |
+| `alerta` | Alertas de rotación, bienestar y formación | `RIESGO_ROTACION` (entidad `USUARIO`) al pasar a nivel alto, si no hay otra abierta; la gestiona una persona (LEG-005) |
+| `linea_base` | Rotación y absentismo previos al alta | RF-037. Una vigente por empresa (`PUT /v1/baseline` la sustituye). `dias_absentismo` son días de ausencia injustificada, la misma medida que `incidencia`, para comparar en homogéneo |
 | `solicitud_ia` | Registro de consultas al asesor | Sin contenido; solo hash, origen (`LIVE`, `CACHE`, `REGLAS`), aviso servido (0005), tokens, latencia y valoración útil/no útil |
 | `respuesta_ia` | Caché del asesor (0005, `IA-014`) | Clave: hash de la entrada normalizada (perfil no identificativo, preferencias, catálogo y versión del prompt). Solo la salida validada; 7 días, sin caducidad las pregeneradas para la demo (`cli/ai_warmup.php`) |
 | `registro_auditoria` | Acciones sensibles | Solo inserción |

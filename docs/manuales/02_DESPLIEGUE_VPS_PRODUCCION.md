@@ -416,6 +416,8 @@ API=/var/www/hermantorres/eude/pymehub/pymehub_api
 0 2 * * *  www-data  bash $API/cli/backup.sh >> $API/storage/logs/backup.log 2>&1
 0 4 * * *  www-data  php $API/cli/purge_retention.php >> $API/storage/logs/cron.log 2>&1
 0 6 * * 1  www-data  php $API/cli/wellbeing_alerts.php >> $API/storage/logs/cron.log 2>&1
+0 3 * * *  www-data  php $API/cli/recalc_risk.php >> $API/storage/logs/cron.log 2>&1
+30 4 1 1,4,7,10 *  www-data  php $API/cli/bias_report.php --salida=$API/storage/logs/sesgos_$(date +\%Y\%m).md >> $API/storage/logs/cron.log 2>&1
 CRON
 sudo chmod 644 /etc/cron.d/pymehub
 systemctl is-active cron && cat /etc/cron.d/pymehub
@@ -469,7 +471,7 @@ Sin clave, el asesor responde siempre con el respaldo por reglas, indicado en la
 
 ```bash
 curl -s https://api.pymehub.hermantorres.com/v1/health
-#  "estado":"ok", "version":"0.5.0", base_datos ok, copia_seguridad ok
+#  "estado":"ok", "version":"0.6.0", base_datos ok, copia_seguridad ok
 curl -s -o /dev/null -w "%{http_code}\n" https://api.pymehub.hermantorres.com/install            # 404
 curl -s -o /dev/null -w "%{http_code}\n" https://api.pymehub.hermantorres.com/config/config.php  # 404
 
@@ -482,19 +484,21 @@ curl -s -D - -o /dev/null -X OPTIONS https://api.pymehub.hermantorres.com/v1/aut
 curl -sI https://pymehub.hermantorres.com/ | grep -Ei 'content-security|strict-transport'
 ```
 
-**Prueba de humo** (130 comprobaciones). Crea empresas y usuarios de prueba: ejecútala **antes** de cargar la demo. Si no puede iniciar sesión como administrador, se detiene y lo dice (revisa la contraseña; tras 5 intentos, espera 15 minutos).
+**Prueba de humo** (156 comprobaciones). Crea empresas y usuarios de prueba: ejecútala **antes** de cargar la demo. Si no puede iniciar sesión como administrador, se detiene y lo dice (revisa la contraseña; tras 5 intentos, espera 15 minutos).
 
 ```bash
 cd $API
 bash tests/smoke_test.sh https://api.pymehub.hermantorres.com https://pymehub.hermantorres.com TU_EMAIL_ADMIN 'TU_CONTRASEÑA_ADMIN'
-# Resultado: 130 correctas, 0 fallidas
+# Resultado: 156 correctas, 0 fallidas
 ```
 
 **Datos de demostración** (repítelo la víspera de la defensa):
 
 ```bash
 sudo -u www-data php $API/cli/demo_seed.php --password='LA_CONTRASEÑA_DE_LA_DEMO' --reset
+#   → … Riesgo de rotación (Castilla): 6 en nivel alto, 10 en medio, 6 alertas, … puntuaciones históricas
 sudo -u www-data php $API/cli/ai_warmup.php          # solo si hay clave de IA (8.1)
+sudo -u www-data php $API/cli/recalc_risk.php        # comprobación: "… 6 en nivel alto, 0 alerta(s) nueva(s)"
 ```
 
 **En el navegador** (`https://pymehub.hermantorres.com`):
@@ -504,7 +508,9 @@ sudo -u www-data php $API/cli/ai_warmup.php          # solo si hay clave de IA (
 3. `conductor@pymehub.demo` → Check-in; en el móvil, con modo avión, se guarda y se envía al recuperar señal.
 4. `conductor@pymehub.demo` → Formación: «Conducción nocturna segura» a medias, cuestionario y pestaña **Asesor** con 3 recomendaciones e inscripción en un toque.
 5. `gerente@pymehub.demo` → Formación → Recomendaciones y demanda formativa del equipo.
-6. Consola del navegador (F12) sin errores de CSP ni de CORS.
+6. `rrhh@pymehub.demo` → **IA de RR. HH.**: 6 personas en riesgo alto, alertas de rotación, tendencias, línea base y comprobación retrospectiva; «Por persona», «Sesgos» y «Metodología». La ficha de una persona en riesgo alto muestra los factores y «¿De dónde sale esto?».
+7. `gerente2@pymehub.demo` (plan Entrada) → IA de RR. HH. muestra la vista informativa del plan Completo.
+8. Consola del navegador (F12) sin errores de CSP ni de CORS.
 
 Externas: [securityheaders.com](https://securityheaders.com) y [SSL Labs](https://www.ssllabs.com/ssltest/) sobre ambos subdominios; objetivo, nota A.
 
@@ -583,8 +589,8 @@ Si una migración falla, restaura la copia del primer comando y vuelve a la etiq
 - [ ] `hermantorres.com/eude/...` no expone el proyecto.
 - [ ] `config.js` de la web creado.
 - [ ] Instalador completado, `/install` 404, `config.php` 640 y copia fuera del servidor.
-- [ ] `/etc/cron.d/pymehub` con copias, retención y alertas; primera copia hecha; restauración probada.
+- [ ] `/etc/cron.d/pymehub` con copias, retención, alertas, riesgo diario (03:00) y sesgos trimestrales; primera copia hecha; restauración probada.
 - [ ] `/v1/health` en `ok` con versión 0.5.0 y `copia_seguridad: ok`.
-- [ ] Prueba de humo 130/130, después datos de demo con la contraseña real (y `ai_warmup` si hay clave).
+- [ ] Prueba de humo 156/156, después datos de demo con la contraseña real (y `ai_warmup` si hay clave).
 - [ ] Recorrido en navegador sin errores de consola; notas A externas.
 - [ ] Monitor externo activo.

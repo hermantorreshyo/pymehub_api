@@ -13,6 +13,7 @@ use PymeHub\Controllers\V1\FormacionController as Formacion;
 use PymeHub\Controllers\V1\HealthController as Health;
 use PymeHub\Controllers\V1\IncidenciaController as Incidencias;
 use PymeHub\Controllers\V1\MiFormacionController as MiFormacion;
+use PymeHub\Controllers\V1\RiesgoController as Riesgo;
 use PymeHub\Controllers\V1\UsuarioController as Usuarios;
 use PymeHub\Core\Router;
 use PymeHub\Middleware\Auth;
@@ -30,6 +31,8 @@ return static function (Router $r): void {
     $planBienestar = Auth::plan('bienestar');
     $planFormacion = Auth::plan('formacion');
     $planAsesor = Auth::plan('asesor_formacion');
+    $planRiesgo = Auth::plan('riesgo_rotacion');
+    $planLineaBase = Auth::plan('linea_base');
 
     // Salud (pública)
     $r->add('GET', '/v1/health', [Health::class, 'show']);
@@ -105,6 +108,17 @@ return static function (Router $r): void {
     $r->add('GET',  '/v1/me/training/{id}', [MiFormacion::class, 'show'], [$empleado, $planFormacion]);
     $r->add('POST', '/v1/me/training/{id}/progress', [MiFormacion::class, 'progress'], [$empleado, $planFormacion, $csrf]);
     $r->add('POST', '/v1/me/training/{id}/submit', [MiFormacion::class, 'submit'], [$empleado, $planFormacion, $csrf]);
+
+    // IA para RR. HH. (§9, fase 7): panel en ambos planes; riesgo y línea base solo en Completo (RF-010)
+    $r->add('GET',  '/v1/dashboard/overview', [Riesgo::class, 'overview'], [$gestion]);
+    $r->add('GET',  '/v1/dashboard/trends', [Riesgo::class, 'trends'], [$gestion, $planRiesgo]);
+    $r->add('GET',  '/v1/risk', [Riesgo::class, 'index'], [$gestion, $planRiesgo]);
+    $r->add('POST', '/v1/risk/recalculate', [Riesgo::class, 'recalculate'], [$gestion, $planRiesgo, $csrf]);
+    $r->add('GET',  '/v1/risk/methodology', [Riesgo::class, 'methodology'], [$gestion, $planRiesgo]);
+    $r->add('GET',  '/v1/risk/bias', [Riesgo::class, 'bias'], [$gestion, $planRiesgo]);
+    $r->add('GET',  '/v1/employees/{id}/risk', [Riesgo::class, 'show'], [$gestion, $planRiesgo]);
+    $r->add('GET',  '/v1/baseline', [Riesgo::class, 'baseline'], [$gestion, $planLineaBase]);
+    $r->add('PUT',  '/v1/baseline', [Riesgo::class, 'saveBaseline'], [$gestion, $planLineaBase, $csrf]);
 
     // Alertas (§8.4): bienestar en ambos planes; riesgo de rotación solo en Completo
     $r->add('GET',   '/v1/alerts', [Alertas::class, 'index'], [$gestion]);

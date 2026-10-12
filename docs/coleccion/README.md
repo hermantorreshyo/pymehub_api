@@ -5,14 +5,17 @@
 3. Ejecuta **01 · Autenticación → Login**: Postman guarda la cookie de sesión y el token CSRF (`{{csrf}}`), que se envía en `X-CSRF-Token` en todas las peticiones que modifican datos.
 4. Las peticiones de alta guardan los identificadores (`empresa_id`, `equipo_id`, `empleado_id`…) para las siguientes.
 
-Recorrido completo probado (36 peticiones, todas correctas):
+Recorrido probado con Newman (v0.6.0):
 
 | Paso | Usuario | Carpetas |
 |---|---|---|
 | 1 | Administrador de la plataforma | 00, 01, 02 (crea una empresa y guarda la invitación del gerente) |
-| 2 | Sin sesión | 10 (acepta la invitación del gerente) |
-| 3 | Gerente recién activado | 01, 03, 04, 05, 06, 07, 11 |
-| 4 | `conductor@pymehub.demo` (datos de demo) | 01, 08 |
-| 5 | `gerente@pymehub.demo` (datos de demo) | 01, 09 |
+| 2 | Sin sesión | 14 (acepta la invitación del gerente) |
+| 3 | Gerente recién activado | 01, 03, 04, 05, 06, 07, 15 |
+| 4 | `conductor@pymehub.demo` (datos de demo) | 01, 08, 11, 12 |
+| 5 | `gerente@pymehub.demo` (datos de demo) | 01, 09, 10 |
+| 6 | `rrhh@pymehub.demo` (datos de demo, plan Completo) | 01, 13 (9 peticiones, todas correctas). «Recalcular ahora» admite una llamada cada 10 minutos por empresa |
+
+Con `gerente2@pymehub.demo` (plan Entrada), la carpeta 13 responde `PH-PLAN-001` salvo el panel de indicadores, que es común a los dos planes.
 
 La colección crece con cada avance, a la par que `docs/openapi.yaml`.

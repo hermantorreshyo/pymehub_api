@@ -17,7 +17,8 @@ use PymeHub\Repositories\ModuloRepository;
  * - Usuarios de acceso: admin@, gerente@, rrhh@ y conductor@ (Castilla) y gerente2@ (Tajo),
  *   en el dominio ficticio pymehub.demo, todos con la contraseña indicada al generar.
  *
- * Cada fase añade aquí sus datos (fase 4: bienestar; fase 5: incidencias y formación).
+ * Cada fase añade aquí sus datos (fase 4: bienestar; fase 5: incidencias y formación; fase 6: asesor;
+ * fase 7: bajas, riesgo de rotación con histórico semanal, alertas y línea base).
  * Es determinista: misma semilla, mismos datos.
  */
 final class DemoService
@@ -175,7 +176,14 @@ final class DemoService
 
             // --- Fase 6 · Asesor: preferencias (demanda formativa) e historial de consultas sin contenido ---
             $resumen['preferencias'] = $this->asesor($castilla, $plantillaC, $conductor) + $this->asesor($tajo, $plantillaT, null);
+
+            // --- Fase 7 · Bajas de los últimos 12 meses (rotación, línea base y retrospectiva) ---
+            $resumen['bajas'] = $this->bajas($castilla, $plantillaC['equipos'], $hoy, 6, 9, $rrhh)
+                + $this->bajas($tajo, $plantillaT['equipos'], $hoy, 2, 2, $gerenteTajo);
         });
+
+        // --- Fase 7 · Riesgo de rotación: histórico semanal desde el alta, alertas y línea base ---
+        $resumen['riesgo'] = $this->riesgo($resumen['castilla']['id'], $hoy);
 
         // Alertas de equipo con la última semana completa (RF-054)
         $resumen['alertas'] = BienestarService::evaluarAlertas($resumen['castilla']['id'], $hoy)
@@ -550,6 +558,157 @@ final class DemoService
             }
         }
         return $n;
+    }
+
+    /**
+     * Antiguos empleados (§18). $desdeAlta bajas voluntarias en los 120 días de uso de Pyme Hub y
+     * $antes en los 8 meses previos; más una de fin de contrato y otra no voluntaria. Las voluntarias
+     * tienen el perfil que la literatura asocia a la rotación (poca antigüedad, contrato temporal,
+     * ausencias antes de irse) para que la comprobación retrospectiva tenga casos que mostrar.
+     */
+    private function bajas(int $empresa, array $equipos, string $hoy, int $desdeAlta, int $antes, int $autor): int
+    {
+        $nombresEquipo = array_keys($equipos);
+        $casos = [];
+        for ($i = 0; $i < $desdeAlta; $i++) {
+            $casos[] = ['VOLUNTARIA', mt_rand(5, 115)];
+        }
+        for ($i = 0; $i < $antes; $i++) {
+            $casos[] = ['VOLUNTARIA', mt_rand(125, 360)];
+        }
+        $casos[] = ['FIN_CONTRATO', mt_rand(20, 300)];
+        $casos[] = ['NO_VOLUNTARIA', mt_rand(130, 300)];
+        foreach ($casos as $k => [$motivo, $hace]) {
+            $equipo = $nombresEquipo[mt_rand(0, count($nombresEquipo) - 1)];
+            $baja = Tiempo::sumarDias($hoy, -$hace);
+            $voluntaria = $motivo === 'VOLUNTARIA';
+            $estancia = $voluntaria ? (mt_rand(1, 100) <= 70 ? mt_rand(25, 88) : mt_rand(95, 330)) : mt_rand(180, 900);
+            $alta = Tiempo::sumarDias($baja, -$estancia);
+            $nom = self::NOMBRES[mt_rand(0, count(self::NOMBRES) - 1)];
+            $ape = self::APELLIDOS[mt_rand(0, count(self::APELLIDOS) - 1)] . ' ' . self::APELLIDOS[mt_rand(0, count(self::APELLIDOS) - 1)];
+            $puesto = $equipo === 'Almacén' ? 'MOZO_ALMACEN' : (mt_rand(0, 1) === 1 ? 'CONDUCTOR' : 'REPARTIDOR');
+            $turno = $equipo === 'Nocturno' ? 'NOCHE' : ($equipo === 'Almacén' ? 'ROTATIVO' : (mt_rand(0, 1) === 1 ? 'MANANA' : 'TARDE'));
+            $contrato = $voluntaria ? (['TEMPORAL', 'ETT', 'TEMPORAL', 'INDEFINIDO'][mt_rand(0, 3)]) : ($motivo === 'FIN_CONTRATO' ? 'TEMPORAL' : 'INDEFINIDO');
+            $email = 'ex.' . $this->slug($nom) . '.' . (++$this->seq) . '@antiguos.' . self::DOMINIO;
+            $id = Db::insert(
+                "INSERT INTO usuario (interlocutor_id, tipo_interlocutor, perfil, nombre, apellidos, email, password_hash, estado_acceso)
+                 VALUES (?, 'EMPRESA', 'EMPLEADO', ?, ?, ?, NULL, 'BAJA')",
+                [$empresa, $nom, $ape, $email]
+            );
+            Db::insert(
+                'INSERT INTO ficha_laboral (usuario_id, interlocutor_id, equipo_id, codigo_interno, puesto, tipo_contrato, turno, fecha_alta, fecha_baja, motivo_baja)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [$id, $empresa, $equipos[$equipo], sprintf('EX-%04d', $this->seq), $puesto, $contrato, $turno, $alta, $baja, $motivo]
+            );
+            // Ausencias injustificadas en las semanas previas a una baja voluntaria
+            if ($voluntaria && mt_rand(1, 100) <= 65) {
+                foreach (range(1, mt_rand(1, 2)) as $j) {
+                    Db::insert(
+                        "INSERT INTO incidencia (interlocutor_id, usuario_id, tipo, fecha, nota, registrada_por) VALUES (?, ?, 'AUSENCIA_INJUSTIFICADA', ?, NULL, ?)",
+                        [$empresa, $id, Tiempo::sumarDias($baja, -mt_rand(3, min(50, $estancia - 1))), $autor]
+                    );
+                }
+            }
+        }
+        return count($casos);
+    }
+
+    /**
+     * Riesgo de rotación de Castilla (§18):
+     * 1. Ajusta la plantilla para que haya entre 5 y 8 personas en nivel alto, con ausencias recientes
+     *    o reconocimientos, de forma determinista.
+     * 2. Reconstruye una puntuación semanal desde el alta en Pyme Hub (sin alertas) y la de hoy.
+     * 3. Crea las alertas de rotación de quien está hoy en nivel alto y deja una ya gestionada.
+     * 4. Registra la línea base de los 12 meses anteriores al alta (RF-037).
+     */
+    private function riesgo(int $empresa, string $hoy): array
+    {
+        $conductor = (int) Db::value('SELECT id FROM usuario WHERE email = ?', ['conductor@' . self::DOMINIO]);
+        $autor = (int) Db::value("SELECT id FROM usuario WHERE interlocutor_id = ? AND perfil = 'RRHH' LIMIT 1", [$empresa]);
+        $incidencia = static function (int $uid, string $tipo, int $hace, ?string $nota) use ($empresa, $hoy, $autor): void {
+            Db::insert(
+                'INSERT INTO incidencia (interlocutor_id, usuario_id, tipo, fecha, nota, registrada_por) VALUES (?, ?, ?, ?, ?, ?)',
+                [$empresa, $uid, $tipo, Tiempo::sumarDias($hoy, -$hace), $nota, $autor]
+            );
+        };
+        $puntuar = static function () use ($empresa, $hoy): array {
+            $out = [];
+            foreach (RiesgoService::datos($empresa, $hoy) as $uid => $d) {
+                $out[$uid] = RiesgoService::calcular($d, $hoy)['puntuacion'];
+            }
+            arsort($out);
+            return $out;
+        };
+        $alto = RiesgoService::reglas()['niveles']['ALTO'];
+        // 1. Entre 5 y 8 personas en nivel alto (el conductor de la demo cuenta, pero no se toca)
+        for ($vuelta = 0; $vuelta < 12; $vuelta++) {
+            $p = $puntuar();
+            $altos = array_filter($p, static fn ($v) => $v >= $alto);
+            if (count($altos) > 8) {
+                // Reconocimiento reciente a quien está justo por encima del umbral
+                $candidatos = array_keys(array_filter($altos, static fn ($v, $k) => $k !== $conductor, ARRAY_FILTER_USE_BOTH));
+                $incidencia(end($candidatos), 'RECONOCIMIENTO', mt_rand(5, 60), 'Felicitación de un cliente por la entrega.');
+            } elseif (count($altos) < 6) {
+                // Dos ausencias recientes a quien está más cerca del umbral sin alcanzarlo
+                $uid = array_key_first(array_filter($p, static fn ($v) => $v < $alto));
+                $incidencia($uid, 'AUSENCIA_INJUSTIFICADA', mt_rand(3, 25), null);
+                $incidencia($uid, 'AUSENCIA_INJUSTIFICADA', mt_rand(26, 55), null);
+            } else {
+                break;
+            }
+        }
+        // Algunas ausencias aisladas (nivel medio) para que el factor aparezca también por debajo del umbral
+        $p = $puntuar();
+        $medios = array_keys(array_filter($p, static fn ($v) => $v < $alto - 15 && $v >= 15));
+        foreach (array_slice($medios, 0, 3) as $uid) {
+            $incidencia($uid, 'AUSENCIA_INJUSTIFICADA', mt_rand(10, 50), null);
+        }
+
+        // 2. Histórico semanal desde el alta y puntuación de hoy
+        $alta = (string) Db::value('SELECT MIN(fecha_inicio) FROM suscripcion WHERE interlocutor_id = ?', [$empresa]);
+        $fechas = [];
+        for ($f = $alta; $f < $hoy; $f = Tiempo::sumarDias($f, 7)) {
+            $fechas[] = $f;
+        }
+        $fechas[] = $hoy;
+        foreach ($fechas as $f) {
+            RiesgoService::recalcular($empresa, $f, false);
+        }
+
+        // 3. Alertas de quien está hoy en nivel alto; la más antigua, ya gestionada
+        $alertas = 0;
+        foreach (RiesgoService::ultimas($empresa, ['nivel' => 'ALTO']) as $x) {
+            $alertas += RiesgoService::alertar($empresa, $x['empleado']['id'], $x) ? 1 : 0;
+            Db::run(
+                "UPDATE alerta SET creado_en = UTC_TIMESTAMP() - INTERVAL ? DAY
+                  WHERE interlocutor_id = ? AND tipo = 'RIESGO_ROTACION' AND entidad_id = ?",
+                [mt_rand(0, 20), $empresa, $x['empleado']['id']]
+            );
+        }
+        Db::run(
+            "UPDATE alerta SET estado = 'GESTIONADA', gestionada_por = ?, gestionada_en = UTC_TIMESTAMP() - INTERVAL 1 DAY,
+                    nota_gestion = 'Conversación de seguimiento mantenida; se revisa el cambio de ruta.'
+              WHERE interlocutor_id = ? AND tipo = 'RIESGO_ROTACION' AND estado = 'ABIERTA' ORDER BY creado_en LIMIT 1",
+            [$autor, $empresa]
+        );
+
+        // 4. Línea base de los 12 meses anteriores al alta (ausencias injustificadas, la misma medida
+        //    que registra la aplicación: así la comparación es homogénea)
+        $actual = RiesgoService::lineaBase($empresa)['actual'];
+        $diasLb = (int) round($actual['absentismo_anualizado_por_persona'] / 0.8 * 46);
+        Db::insert(
+            'INSERT INTO linea_base (interlocutor_id, periodo_inicio, periodo_fin, plantilla_media, bajas_voluntarias, dias_absentismo, fuente, registrada_por)
+             VALUES (?, ?, ?, 46.00, 21, ?, ?, ?)',
+            [$empresa, (new \DateTimeImmutable($alta))->modify('-12 months')->format('Y-m-d'), Tiempo::sumarDias($alta, -1), max(1, $diasLb),
+                'Nóminas y partes de ausencia del año anterior (dato ficticio de la demo)', $autor]
+        );
+        $u = RiesgoService::ultimas($empresa);
+        return [
+            'puntuaciones' => (int) Db::value('SELECT COUNT(*) FROM puntuacion_riesgo WHERE interlocutor_id = ?', [$empresa]),
+            'alto'         => count(array_filter($u, static fn ($x) => $x['nivel'] === 'ALTO')),
+            'medio'        => count(array_filter($u, static fn ($x) => $x['nivel'] === 'MEDIO')),
+            'alertas'      => $alertas,
+        ];
     }
 
     /** Valor 1–5 alrededor de una media, con ruido. */

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prueba de humo de Pyme Hub API (fases 0-6).
+# Prueba de humo de Pyme Hub API (fases 0-7).
 # Uso: tests/smoke_test.sh <URL_API> <ORIGEN_FRONTEND> <EMAIL_ADMIN> <PASSWORD_ADMIN>
 # Crea dos empresas de prueba con NIF y emails aleatorios. No usar en producción con datos reales.
 set -uo pipefail
@@ -224,11 +224,47 @@ check "uso de IA para la plataforma (sin contenido)" "$(curl -s -b "$T/a" "$B/v1
 check "la gestión no ve el uso de IA de la plataforma -> PH-PERM-001" "$(curl -s -b "$T/h" "$B/v1/admin/ai-usage" | code)" "PH-PERM-001"
 check "borrar mis preferencias (LEG-014)" "$(curl -s -b "$T/e" -X DELETE -H "X-CSRF-Token: $CE" -o /dev/null -w '%{http_code}' "$B/v1/me/training/preferences")" "204"
 
+echo "== IA para RR. HH. · riesgo de rotación (fase 7)"
+ALTA20=$(date -u -d '20 days ago' +%F)
+send h POST "$CH" /v1/employees "{\"nombre\":\"Rosa\",\"apellidos\":\"Riesgo\",\"codigo_interno\":\"SMK-R\",\"puesto\":\"CONDUCTOR\",\"tipo_contrato\":\"TEMPORAL\",\"turno\":\"NOCHE\",\"fecha_alta\":\"$ALTA20\",\"equipo_id\":$EQN}" > "$T/er.json"
+ER=$(jq_ "d['data']['id']" < "$T/er.json")
+send h POST "$CH" "/v1/employees/$ER/incidents" "{\"tipo\":\"AUSENCIA_INJUSTIFICADA\",\"fecha\":\"$HOY\"}" > /dev/null
+send h POST "$CH" "/v1/employees/$ER/incidents" "{\"tipo\":\"AUSENCIA_INJUSTIFICADA\",\"fecha\":\"$(date -u -d '3 days ago' +%F)\"}" > /dev/null
+check "panel en plan Entrada, sin bloque de riesgo (RF-030)" "$(curl -s -b "$T/t" "$B/v1/dashboard/overview" | jq_ "str(d['data']['riesgo'])+' '+str(isinstance(d['data']['plantilla_activa'], int))")" "None True"
+check "plan Entrada: ranking de riesgo -> PH-PLAN-001 (RF-010)" "$(curl -s -b "$T/t" "$B/v1/risk" | code)" "PH-PLAN-001"
+check "plan Entrada: ficha de riesgo -> PH-PLAN-001" "$(curl -s -b "$T/t" "$B/v1/employees/$E2/risk" | code)" "PH-PLAN-001"
+check "plan Entrada: línea base -> PH-PLAN-001" "$(curl -s -b "$T/t" "$B/v1/baseline" | code)" "PH-PLAN-001"
+check "plan Entrada: tendencias -> PH-PLAN-001" "$(curl -s -b "$T/t" "$B/v1/dashboard/trends" | code)" "PH-PLAN-001"
+check "el empleado no ve el riesgo -> PH-PERM-001" "$(curl -s -b "$T/e" "$B/v1/risk" | code)" "PH-PERM-001"
+curl -s -b "$T/h" "$B/v1/risk" > "$T/rk.json"
+check "ranking por puntuación con versión de reglas (RF-031, RF-032)" "$(jq_ "d['data'][0]['empleado']['id']==$ER and d['data'][0]['nivel']=='ALTO' and d['meta']['version_reglas']=='v1.1' and 'supervision' in d['meta']" < "$T/rk.json")" "True"
+check "filtro por nivel" "$(curl -s -b "$T/h" "$B/v1/risk?level=ALTO" | jq_ "d['meta']['total']")" "1"
+check "nivel no válido -> PH-VAL-001" "$(curl -s -b "$T/h" "$B/v1/risk?level=MUY_ALTO" | code)" "PH-VAL-001"
+curl -s -b "$T/g" "$B/v1/employees/$ER/risk" > "$T/fr.json"
+check "ficha explicada: 30+25+15+10 = 80 (RF-034)" "$(jq_ "str(d['data']['puntuacion'])+' '+','.join(f['codigo'] for f in d['data']['factores'])+' '+str(all(f['detalle'] and 'fuentes' in f for f in d['data']['factores']))" < "$T/fr.json")" "80 F1,F2,F3,F5 True"
+check "la ficha remite a la metodología y avisa de la supervisión (LEG-005)" "$(jq_ "d['meta']['metodologia']+' '+str('conversación' in d['meta']['supervision'])+' '+str(len(d['data']['historico']) >= 1)" < "$T/fr.json")" "/v1/risk/methodology True True"
+check "los retrasos no puntúan (§9.3)" "$(curl -s -b "$T/h" "$B/v1/employees/$EID/risk" | jq_ "str(d['data']['puntuacion'])+' '+d['data']['nivel']")" "0 BAJO"
+check "paso a nivel alto -> alerta de rotación (RF-033)" "$(curl -s -b "$T/g" "$B/v1/alerts?tipo=RIESGO_ROTACION" | jq_ "str(d['meta']['total'])+' '+d['data'][0]['severidad']")" "1 ALTA"
+check "ficha de otra empresa -> PH-TENANT-001" "$(curl -s -b "$T/g" "$B/v1/employees/$E2/risk" | code)" "PH-TENANT-001"
+check "recalcular bajo demanda (RF-031)" "$(send h POST "$CH" /v1/risk/recalculate '{}' | jq_ "str(d['data']['personas'])+' '+str(d['data']['alto'])+' '+str(d['data']['alertas'])")" "4 1 0"
+check "recalcular otra vez antes de 10 minutos -> PH-RATE-001" "$(send g POST "$CG" /v1/risk/recalculate '{}' | code)" "PH-RATE-001"
+check "metodología: 7 factores, exclusiones y fuentes (LEG-006)" "$(curl -s -b "$T/h" "$B/v1/risk/methodology" | jq_ "str(len(d['data']['factores']))+' '+d['data']['version']+' '+d['data']['excluidos'][0]['nombre']+' '+str(len(d['data']['fuentes']))")" "7 v1.1 Retrasos 7"
+check "revisión de sesgos por 4 dimensiones (LEG-015)" "$(curl -s -b "$T/h" "$B/v1/risk/bias" | jq_ "str(len(d['data']['dimensiones']))+' '+str(d['data']['umbral_pp'])")" "4 20"
+check "panel Completo con riesgo y alertas (RF-030)" "$(curl -s -b "$T/g" "$B/v1/dashboard/overview" | jq_ "str(d['data']['riesgo']['alto'])+' '+str(d['data']['alertas_riesgo_abiertas'])+' '+str(d['data']['plantilla_activa'])")" "1 1 4"
+check "tendencias de 6 meses" "$(curl -s -b "$T/g" "$B/v1/dashboard/trends?months=6" | jq_ "len(d['data'])")" "6"
+check "tendencias fuera de rango -> PH-VAL-001" "$(curl -s -b "$T/g" "$B/v1/dashboard/trends?months=40" | code)" "PH-VAL-001"
+check "línea base vacía con periodo sugerido (RF-037)" "$(curl -s -b "$T/h" "$B/v1/baseline" | jq_ "str(d['data']['linea_base'])+' '+str(d['meta']['sugerencia']['periodo_fin'] < '$HOY')")" "None True"
+LB1=$(date -u -d '1 year ago' +%F); LB2=$(date -u -d '1 day ago' +%F)
+check "línea base sin CSRF -> PH-AUTH-003" "$(curl -s -b "$T/h" -X PUT -H "$J" "$B/v1/baseline" -d '{}' | code)" "PH-AUTH-003"
+check "línea base de 2 meses -> PH-VAL-001" "$(send h PUT "$CH" /v1/baseline "{\"periodo_inicio\":\"$(date -u -d '60 days ago' +%F)\",\"periodo_fin\":\"$LB2\",\"plantilla_media\":20,\"bajas_voluntarias\":5,\"dias_absentismo\":30}" | code)" "PH-VAL-001"
+check "línea base con plantilla no numérica -> PH-VAL-001" "$(send h PUT "$CH" /v1/baseline "{\"periodo_inicio\":\"$LB1\",\"periodo_fin\":\"$LB2\",\"plantilla_media\":\"veinte\",\"bajas_voluntarias\":5,\"dias_absentismo\":30}" | code)" "PH-VAL-001"
+check "registrar línea base: rotación 25 % y periodo corto" "$(send h PUT "$CH" /v1/baseline "{\"periodo_inicio\":\"$LB1\",\"periodo_fin\":\"$LB2\",\"plantilla_media\":20,\"bajas_voluntarias\":5,\"dias_absentismo\":30,\"fuente\":\"Nóminas 2025\"}" | jq_ "str(d['data']['linea_base']['rotacion_voluntaria'])+' '+str(d['data']['comparacion']['periodo_corto'])+' '+str(d['data']['comparacion']['objetivo_piloto'])")" "25 True -15"
+
 echo "== Baja laboral"
 check "motivo no válido -> PH-VAL-001" "$(send h DELETE "$CH" "/v1/employees/$EID" "{\"fecha_baja\":\"$HOY\",\"motivo_baja\":\"DESPIDO\"}" | code)" "PH-VAL-001"
 check "baja con motivo y sin acceso" "$(send h DELETE "$CH" "/v1/employees/$EID" "{\"fecha_baja\":\"$HOY\",\"motivo_baja\":\"VOLUNTARIA\"}" | campos 'motivo_baja estado_acceso')" "VOLUNTARIA BAJA"
 check "ficha de baja en solo lectura -> PH-VAL-001" "$(send h PATCH "$CH" "/v1/employees/$EID" '{"turno":"NOCHE"}' | code)" "PH-VAL-001"
-check "la baja sale de la lista de altas" "$(total h /v1/employees)" "2"
+check "la baja sale de la lista de altas" "$(total h /v1/employees)" "3"
 check "y aparece en las bajas" "$(total h '/v1/employees?situacion=BAJA')" "1"
 
 echo "== CORS"

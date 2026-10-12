@@ -2,7 +2,7 @@
 
 **Proyecto:** Pyme Hub — TFM EUDE Business School (The Best Team)
 **Documento:** Especificación de requerimientos técnicos del Producto Mínimo Viable (MVP)
-**Versión:** 0.9.3 · 12/10/2026
+**Versión:** 0.9.4 · 12/10/2026
 **Stack:** LAMP nativo, sin Docker (Linux · Apache · **MariaDB 11.8 LTS o MySQL 8.4 LTS** · PHP 8.4). Producción: MariaDB 11.8
 **Repositorios:** dos, independientes: `pymehub_api` (backend tipo API) y `pymehub_web` (frontend que consume la API)
 **Estado:** Alineado con la versión 4 del documento del TFM (carpeta *Revisión 004*). Los cambios que este documento obliga a trasladar al TFM se listan en §22.3.
@@ -23,6 +23,7 @@
 | 0.9.1 | 12/10/2026 | Rutas reales de producción: `/var/www/hermantorres/eude/pymehub/pymehub_api` y `/var/www/hermantorres/eude/pymehub/pymehub_web` (§3.2, §4.1) |
 | 0.9.3 | 12/10/2026 | Fase 6 (Asesor de formación): implementación de §12.5 en §12.7 (objetivos cerrados, perfil no identificativo, caché independiente del avance, orden de los modos, cuotas y PayloadGuard ampliado a datos de salud); `GET /v1/admin/ai-usage` sin contenido |
 | 0.9.2 | 12/10/2026 | Fase 5 (Upskilling): §8.5 con el seguimiento (`GET /v1/training/assignments`), la retirada de asignaciones y el resumen (`GET /v1/training/summary`); §10 con el detalle de `RF-041` a `RF-047` (estado `VENCIDA` calculado, idempotencia del cuestionario sin conexión, reglas de `RF-043` sin datos individuales de bienestar) |
+| 0.9.4 | 12/10/2026 | Fase 7 (IA de RR. HH.): §8.4 con `GET /v1/risk/bias` y `GET/PUT /v1/baseline`; §9.6 con la implementación (puntuación diaria, alerta solo al pasar a alto, recálculo limitado, retrospectiva, línea base homogénea en ausencias injustificadas, cron de sesgos) |
 
 ---
 
@@ -423,6 +424,8 @@ Roles: **A** admin · **G** gerente · **H** RR. HH. · **E** empleado. Plan: **
 | GET | `/v1/employees/{id}/risk` | G H | C |
 | POST | `/v1/risk/recalculate` | G H | C |
 | GET | `/v1/risk/methodology` (reglas, pesos, fuentes, versión) | G H | C |
+| GET | `/v1/risk/bias` (revisión de sesgos, `LEG-015`) | G H | C |
+| GET/PUT | `/v1/baseline` (línea base de impacto, `RF-037`) | G H | C |
 | GET | `/v1/alerts?status=open` | G H | Ambos (alertas de rotación solo en C) |
 | PATCH | `/v1/alerts/{id}` | G H | Ambos |
 
@@ -539,6 +542,17 @@ Máximo teórico: 100 puntos (F1 30 + F2 25 + F3 15 + F4 10 + F5 10 + F6 10); el
 
 - `RF-035` (M) La hoja técnica `docs/hoja_tecnica_modelo_riesgo.md` recoge propósito, datos, reglas, pesos, fuentes, versión y estas limitaciones.
 - `RF-036` (C) Fase 2 (meses 17–18 del cronograma, Anexo F del TFM): con 12 meses de datos reales de bajas de los clientes piloto, sustituir los pesos por coeficientes de una regresión logística validada (AUC, calibración), manteniendo la explicación por factor.
+
+### 9.6 Implementación (v0.6.0)
+
+- **Una puntuación por persona y día** (`puntuacion_riesgo.fecha`, migración `0006`). El recálculo bajo demanda sustituye la del día; el cron de las 03:00 añade la del día siguiente. Las ventanas (60 y 90 días) se calculan respecto a la fecha de la puntuación, así que cualquier puntuación se puede reproducir.
+- **Alerta de rotación** (`RF-033`) solo al **pasar** a nivel alto y si no hay otra abierta de esa persona; prioridad alta desde 70 puntos. El texto nombra los tres factores principales y recuerda que la puntuación orienta una conversación.
+- `POST /v1/risk/recalculate`: una vez cada 10 minutos por empresa (`PH-RATE-001`). La primera consulta de una empresa sin puntuaciones calcula la del día.
+- F4 cuenta solo asignaciones de la empresa (`origen = GESTION`), nunca autoinscripciones ni recomendaciones del asesor (`RF-047`).
+- **Comprobación retrospectiva** en el panel: nivel de la última puntuación de cada baja voluntaria desde el alta en Pyme Hub. Orientativa con pocas bajas.
+- **Línea base** (`RF-037`): una vigente por empresa. Los días de absentismo son **días de ausencia injustificada**, la misma medida que registra la aplicación (`LEG-012`), para que la comparación sea homogénea; la evolución desde el alta se anualiza y se marca como no representativa con menos de 90 días.
+- **Sesgos** (`LEG-015`): `GET /v1/risk/bias` y `cli/bias_report.php` (trimestral) marcan grupos de 5 o más personas a más de 20 puntos del total, indicando si el grupo es un factor del modelo (turno, contrato). El resultado se anota en la hoja técnica.
+- Auditoría (`LEG-004`): `riesgo.ficha_consultada`, `riesgo.recalculado` y `linea_base.registrada`.
 
 ---
 
@@ -899,7 +913,7 @@ Coincidencia visual general con el mockup; funciona en escritorio, tableta y mó
 | `cli/purge_retention.php` (retención, sesiones, invitaciones, caché de IA caducada) | Diaria, 04:00 |
 | `cli/backup.sh` (`mysqldump` + uploads, 14 copias) | Diaria, 02:00 |
 | `cli/ai_warmup.php` (pregenera las respuestas de los perfiles de §12.6) | Manual, antes de la defensa |
-| `cli/bias_report.php` (`LEG-015`) | Trimestral |
+| `cli/bias_report.php` (`LEG-015`) | Trimestral (día 1 de enero, abril, julio y octubre, 04:30) |
 | `cli/tenant_purge.php` (borrado de empresas con baja de más de 30 días, `LEG-017`) | Diaria, 04:30 |
 
 ### 17.3 Registro

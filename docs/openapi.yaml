@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Pyme Hub API
-  version: 0.5.0
+  version: 0.6.0
   description: |
     Contrato entre pymehub_api y pymehub_web (DEC-13).
     Autenticación por cookie de sesión HttpOnly. Toda petición que modifica datos
@@ -424,6 +424,68 @@ components:
               modulo: { type: object, properties: { id: { type: integer }, titulo: { type: string }, resumen: { type: string }, categoria: { $ref: '#/components/schemas/Categoria' }, nivel: { $ref: '#/components/schemas/Nivel' }, duracion_min: { type: integer } } }
               asignacion: { type: [object, 'null'], properties: { id: { type: integer }, estado: { type: string }, origen: { type: string } } }
         plan_semanal: { type: string, maxLength: 300 }
+    Factor:
+      type: object
+      description: Factor del motor de riesgo con su explicación (RF-032, RF-034)
+      properties:
+        codigo: { type: string, enum: [F1, F2, F3, F4, F5, F6, F7] }
+        nombre: { type: string }
+        puntos: { type: integer, description: 'Negativo en F7 (reconocimiento)' }
+        detalle: { type: string, description: Frase en lenguaje llano }
+        evidencia: { type: string }
+        fuentes: { type: array, items: { type: string, example: S3 } }
+    NivelRiesgo: { type: string, enum: [BAJO, MEDIO, ALTO], description: 'bajo 0–29 · medio 30–54 · alto 55–100 (RF-033)' }
+    PuntuacionRiesgo:
+      type: object
+      properties:
+        empleado:
+          type: object
+          properties:
+            id: { type: integer }
+            nombre: { type: string }
+            apellidos: { type: [string, 'null'] }
+            puesto: { type: string }
+            turno: { type: string }
+            tipo_contrato: { type: string }
+            fecha_alta: { type: string, format: date }
+            equipo_id: { type: [integer, 'null'] }
+            equipo_nombre: { type: [string, 'null'] }
+        fecha: { type: string, format: date }
+        puntuacion: { type: integer, minimum: 0, maximum: 100 }
+        nivel: { $ref: '#/components/schemas/NivelRiesgo' }
+        factores: { type: array, items: { $ref: '#/components/schemas/Factor' } }
+        version_reglas: { type: string, example: v1.1 }
+    LineaBase:
+      type: object
+      properties:
+        linea_base:
+          type: [object, 'null']
+          properties:
+            periodo_inicio: { type: string, format: date }
+            periodo_fin: { type: string, format: date }
+            plantilla_media: { type: number }
+            bajas_voluntarias: { type: integer }
+            dias_absentismo: { type: integer, description: Días de ausencia injustificada (sin bajas médicas) }
+            fuente: { type: [string, 'null'] }
+            rotacion_voluntaria: { type: number, description: '%' }
+            absentismo_por_persona: { type: number }
+        actual:
+          type: object
+          properties:
+            desde: { type: string, format: date, description: Alta de la empresa en Pyme Hub }
+            dias: { type: integer }
+            plantilla_media: { type: number }
+            bajas_voluntarias: { type: integer }
+            rotacion_voluntaria_anualizada: { type: number }
+            dias_absentismo: { type: integer }
+            absentismo_anualizado_por_persona: { type: number }
+        comparacion:
+          type: [object, 'null']
+          properties:
+            rotacion_relativa: { type: [number, 'null'], description: '% de variación frente a la línea base' }
+            absentismo_relativo: { type: [number, 'null'] }
+            objetivo_piloto: { type: integer, example: -15 }
+            periodo_corto: { type: boolean, description: Menos de 90 días desde el alta }
 paths:
   /v1/health:
     get:
@@ -1177,6 +1239,99 @@ paths:
       parameters: [{ name: days, in: query, schema: { type: integer, default: 30, maximum: 90 } }]
       responses:
         '200': { description: ok }
+  /v1/dashboard/overview:
+    get:
+      summary: Indicadores de la empresa (GERENTE, RRHH · RF-030)
+      description: Ambos planes. `riesgo` y `alertas_riesgo_abiertas` son null en el plan Entrada. El índice de bienestar solo aparece con 5 o más respuestas (LEG-002).
+      security: [{ sesion: [] }]
+      responses:
+        '200':
+          description: 'data = { plantilla_activa, rotacion_12m, rotacion_voluntaria_12m, bajas_12m, antiguedad_media_meses, formacion_en_plazo, riesgo: { alto, medio, bajo, calculado, version_reglas, retrospectiva: { bajas_voluntarias, alto, medio, bajo, sin_puntuacion } } | null, bienestar: { disponible, indice?, nivel?, semana? } | null, alertas_abiertas, alertas_riesgo_abiertas }'
+  /v1/dashboard/trends:
+    get:
+      summary: Tendencias mensuales (GERENTE, RRHH · plan Completo)
+      security: [{ sesion: [] }]
+      parameters: [{ name: months, in: query, schema: { type: integer, minimum: 3, maximum: 12, default: 6 } }]
+      responses:
+        '200': { description: 'data = [{ mes, altas, bajas, bajas_voluntarias, plantilla, rotacion, ausencias, reconocimientos, riesgo_medio, pct_alto }]' }
+        '403': { description: PH-PLAN-001 }
+  /v1/risk:
+    get:
+      summary: Riesgo de rotación por persona, de mayor a menor (GERENTE, RRHH · plan Completo · RF-031)
+      description: Última puntuación de cada persona de alta. En el ranking solo van los 3 factores principales; la explicación completa está en la ficha. Si la empresa no tiene puntuaciones todavía, se calcula la del día.
+      security: [{ sesion: [] }]
+      parameters:
+        - { name: team_id, in: query, schema: { type: integer } }
+        - { name: level, in: query, schema: { $ref: '#/components/schemas/NivelRiesgo' } }
+        - { name: q, in: query, schema: { type: string, maxLength: 80 }, description: Nombre, apellidos o código interno }
+      responses:
+        '200':
+          description: 'meta = { total, niveles: { alto, medio, bajo }, calculado, version_reglas, supervision }'
+          content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/PuntuacionRiesgo' } } } } } }
+        '403': { description: PH-PLAN-001 (plan Entrada) o PH-PERM-001 (empleado) }
+  /v1/employees/{id}/risk:
+    get:
+      summary: Ficha de riesgo explicada (GERENTE, RRHH · plan Completo · RF-034)
+      description: Puntuación, factores en lenguaje llano con evidencia y fuentes, e histórico de 90 días. Cada consulta queda en el registro de auditoría (LEG-004).
+      security: [{ sesion: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses:
+        '200':
+          description: 'data = PuntuacionRiesgo + historico[{ fecha, puntuacion, nivel }]; meta = { supervision, metodologia, alerta: { id, severidad, creado_en } | null }'
+          content: { application/json: { schema: { $ref: '#/components/schemas/PuntuacionRiesgo' } } }
+        '404': { description: PH-TENANT-001 }
+        '409': { description: PH-VAL-001 (empleado de baja) }
+  /v1/risk/recalculate:
+    post:
+      summary: Recalcular el riesgo de la empresa (GERENTE, RRHH · plan Completo · RF-031)
+      description: Sustituye la puntuación del día y crea las alertas de paso a nivel alto (RF-033). Una vez cada 10 minutos por empresa.
+      security: [{ sesion: [], csrf: [] }]
+      requestBody: { content: { application/json: { schema: { type: object } } } }
+      responses:
+        '200': { description: 'data = { personas, alto, medio, bajo, alertas, fecha, version_reglas }' }
+        '429': { description: PH-RATE-001 }
+  /v1/risk/methodology:
+    get:
+      summary: Metodología del motor de riesgo (GERENTE, RRHH · plan Completo · RF-034, LEG-006)
+      security: [{ sesion: [] }]
+      responses:
+        '200': { description: 'data = { version, niveles[], factores[{ codigo, nombre, condicion, puntos_max, evidencia, fuentes }], excluidos[], fuentes[{ id, referencia }], limitaciones[], supervision }' }
+  /v1/risk/bias:
+    get:
+      summary: Revisión de sesgos por grupos (GERENTE, RRHH · plan Completo · LEG-015)
+      description: Niveles por equipo, puesto, turno y tipo de contrato. `revisar` marca los grupos de 5 o más personas que se apartan más de 20 pp del total; `esperable` indica que el grupo es un factor del modelo.
+      security: [{ sesion: [] }]
+      responses:
+        '200': { description: 'data = { personas, pct_alto_total, umbral_pp, version_reglas, dimensiones[{ dimension, grupos[{ grupo, personas, alto, medio, bajo, pct_alto, diferencia, revisar, muestra_pequena, esperable }] }] }' }
+  /v1/baseline:
+    get:
+      summary: Línea base de impacto y comparación (GERENTE, RRHH · plan Completo · RF-037)
+      security: [{ sesion: [] }]
+      responses:
+        '200':
+          description: 'meta.sugerencia = { alta, periodo_inicio, periodo_fin }: los 12 meses anteriores al alta'
+          content: { application/json: { schema: { $ref: '#/components/schemas/LineaBase' } } }
+        '403': { description: PH-PLAN-001 }
+    put:
+      summary: Registrar la línea base (GERENTE, RRHH · plan Completo · RF-037)
+      description: Sustituye la línea base anterior. El periodo debe cubrir entre 6 y 13 meses y no puede terminar en el futuro.
+      security: [{ sesion: [], csrf: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [periodo_inicio, periodo_fin, plantilla_media, bajas_voluntarias, dias_absentismo]
+              properties:
+                periodo_inicio: { type: string, format: date }
+                periodo_fin: { type: string, format: date }
+                plantilla_media: { type: number, minimum: 1 }
+                bajas_voluntarias: { type: integer, minimum: 0 }
+                dias_absentismo: { type: integer, minimum: 0 }
+                fuente: { type: [string, 'null'], maxLength: 150 }
+      responses:
+        '200': { content: { application/json: { schema: { $ref: '#/components/schemas/LineaBase' } } }, description: ok }
+        '422': { description: PH-VAL-001 }
   /v1/alerts:
     get:
       summary: Alertas de la empresa (GERENTE, RRHH · §8.4)

@@ -2,6 +2,45 @@
 
 Formato basado en *Keep a Changelog*; versiones SemVer.
 
+## [0.6.0] · 2026-10-12
+
+Avance 5 · **IA de RR. HH.** (fase 7 del plan, §9): motor de riesgo de rotación v1.1, explicado y auditado, con alertas, panel, tendencias, revisión de sesgos y línea base de impacto. **Migración nueva: `0006_riesgo_diario`.**
+
+### Base de datos
+- `0006_riesgo_diario`: `puntuacion_riesgo.fecha` con clave única `(usuario_id, fecha)` e índice `(interlocutor_id, fecha, nivel)`: una puntuación por persona y día. Probada en MariaDB 11.8.3 y MySQL.
+
+### Núcleo
+- `config/risk_rules.php`: reglas v1.1 (§9.3) con tramos, ventanas, evidencia y fuentes S1–S7, exclusiones y limitaciones. Cambiar un peso exige subir la versión (`RF-032`).
+- `Services/RiesgoService`:
+  - cálculo F1–F7 con una frase en lenguaje llano por factor (`RF-034`);
+  - datos a una fecha, para reconstruir y reproducir cualquier puntuación;
+  - recálculo por empresa y alerta `RIESGO_ROTACION` al pasar a nivel alto, solo si no hay otra abierta; prioridad alta desde 70 (`RF-033`);
+  - ranking, ficha con histórico, metodología, revisión de sesgos (`LEG-015`), panel (`RF-030`), tendencias mensuales, comprobación retrospectiva y línea base (`RF-037`).
+- `cli/recalc_risk.php`: recálculo diario (03:00) de las empresas activas o en piloto con plan Completo; admite `--empresa`, `--fecha` y `--sin-alertas` (`RF-031`).
+- `cli/bias_report.php`: informe trimestral en Markdown por equipo, puesto, turno y contrato, sin nombres (`LEG-015`).
+
+### Seguridad
+- Rutas de riesgo con `Auth::plan('riesgo_rotacion')` y línea base con `Auth::plan('linea_base')`: el plan Entrada recibe `PH-PLAN-001` (`RF-010`, criterio 7). El panel `GET /v1/dashboard/overview` es común a los dos planes, con el bloque de riesgo solo en Completo.
+- Auditoría de cada consulta a la ficha de riesgo (`riesgo.ficha_consultada`, `LEG-004`), del recálculo y del registro de la línea base.
+- Recálculo bajo demanda limitado a una vez cada 10 minutos por empresa (`PH-RATE-001`).
+- El motor nunca usa datos de salud, el check-in de bienestar ni la participación en él (`LEG-012`, `LEG-013`). F4 solo cuenta formación asignada por la empresa (`RF-047`).
+
+### Endpoints
+- `GET /v1/dashboard/overview`, `GET /v1/dashboard/trends?months=`.
+- `GET /v1/risk?team_id=&level=&q=`, `GET /v1/employees/{id}/risk`, `POST /v1/risk/recalculate`, `GET /v1/risk/methodology`, `GET /v1/risk/bias`.
+- `GET` y `PUT /v1/baseline`.
+
+### Operación
+- Datos de demostración:
+  - 23 antiguos empleados con bajas en los últimos 12 meses; las voluntarias tienen el perfil que la literatura asocia a la rotación;
+  - ajuste determinista para que Castilla tenga entre 5 y 8 personas en riesgo alto (hoy, 6);
+  - puntuación semanal desde el alta en Pyme Hub, 6 alertas de rotación (una ya gestionada) y línea base de los 12 meses anteriores.
+- `tests/smoke_test.sh`: **156 comprobaciones** (26 nuevas de fase 7), correctas en MariaDB 11.8.3 y MySQL.
+
+### Documentación
+- **`docs/hoja_tecnica_modelo_riesgo.md`** (`RF-035`, `LEG-006`): propósito, datos, reglas, AI Act, fuentes, procedimiento y registro de la revisión de sesgos, validación, limitaciones y evolución.
+- OpenAPI 0.6.0 (esquemas `Factor`, `PuntuacionRiesgo` y `LineaBase`), colección de Postman (carpeta «13 · IA de RR. HH.»), requisitos v0.9.4 (§9.6), modelo de datos, manuales 01 y 02 (tareas `recalc_risk` y `bias_report` en `/etc/cron.d/pymehub`, verificación), prompt maestro y README.
+
 ## [0.5.0] · 2026-10-12
 
 Avance 4 · **Asesor de formación con IA** (fase 6 del plan, §12), la única funcionalidad con IA generativa. Incluye el manual 02 de producción. **Migración nueva: `0005_asesor_ia`.**

@@ -1900,7 +1900,330 @@
       ]
     },
     {
-      "name": "13 · Invitaciones (sin sesión)",
+      "name": "13 · IA de RR. HH. (GERENTE, RRHH · plan Completo)",
+      "item": [
+        {
+          "name": "Panel de indicadores",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/dashboard/overview",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "dashboard",
+                "overview"
+              ]
+            },
+            "description": "RF-030. Ambos planes; el bloque «riesgo» solo en Completo."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tendencias de 6 meses",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/dashboard/trends?months=6",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "dashboard",
+                "trends"
+              ],
+              "query": [
+                {
+                  "key": "months",
+                  "value": "6"
+                }
+              ]
+            },
+            "description": "Altas, bajas, rotación, ausencias y riesgo medio por mes."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Riesgo por persona",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/risk?level=ALTO",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "risk"
+              ],
+              "query": [
+                {
+                  "key": "level",
+                  "value": "ALTO"
+                }
+              ]
+            },
+            "description": "RF-031. Ranking de mayor a menor con los 3 factores principales. Filtros: team_id, level (BAJO, MEDIO, ALTO), q. Guarda en {{riesgo_empleado_id}} a la persona con más puntuación."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "try { pm.collectionVariables.set('riesgo_empleado_id', j.data[0].empleado.id); } catch (e) {}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ficha de riesgo explicada",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/employees/{{riesgo_empleado_id}}/risk",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "employees",
+                "{{riesgo_empleado_id}}",
+                "risk"
+              ]
+            },
+            "description": "RF-034. Factores en lenguaje llano, fuentes e histórico. La consulta queda auditada (LEG-004)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Recalcular ahora",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/risk/recalculate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "risk",
+                "recalculate"
+              ]
+            },
+            "description": "RF-031. Una vez cada 10 minutos por empresa (PH-RATE-001).",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Metodología",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/risk/methodology",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "risk",
+                "methodology"
+              ]
+            },
+            "description": "Reglas v1.1, pesos, evidencia, fuentes, exclusiones y limitaciones (LEG-006)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Revisión de sesgos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/risk/bias",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "risk",
+                "bias"
+              ]
+            },
+            "description": "LEG-015. Niveles por equipo, puesto, turno y contrato."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Línea base",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/baseline",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "baseline"
+              ]
+            },
+            "description": "RF-037. Línea base, evolución desde el alta y periodo sugerido."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Registrar línea base",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/baseline",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "baseline"
+              ]
+            },
+            "description": "RF-037. Los 12 meses anteriores al alta. Sustituye la anterior.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"periodo_inicio\": \"2025-06-14\",\n  \"periodo_fin\": \"2026-06-13\",\n  \"plantilla_media\": 46,\n  \"bajas_voluntarias\": 21,\n  \"dias_absentismo\": 66,\n  \"fuente\": \"Nóminas y partes de ausencia de 2025\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "14 · Invitaciones (sin sesión)",
       "item": [
         {
           "name": "Aceptar invitación",
@@ -1939,7 +2262,7 @@
       ]
     },
     {
-      "name": "14 · Cerrar sesión",
+      "name": "15 · Cerrar sesión",
       "item": [
         {
           "name": "Logout",
@@ -2027,6 +2350,10 @@
     },
     {
       "key": "solicitud_id",
+      "value": ""
+    },
+    {
+      "key": "riesgo_empleado_id",
       "value": ""
     }
   ]
