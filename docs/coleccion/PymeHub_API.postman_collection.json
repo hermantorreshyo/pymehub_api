@@ -2289,6 +2289,125 @@
           }
         }
       ]
+    },
+    {
+      "name": "16 · Demo comercial y QR del folleto",
+      "item": [
+        {
+          "name": "Estado de la demo (público)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/public/demo-status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "public",
+                "demo-status"
+              ]
+            },
+            "description": "DMO-037. Sin sesión."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Contar una visita (público)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/public/visits",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "public",
+                "visits"
+              ]
+            },
+            "description": "DMO-030. Sin sesión ni CSRF. Usa «prueba_interna» para no sumar en las métricas del folleto; la landing envía «folleto_comercial».",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"campaign\": \"prueba_interna\",\n  \"source\": \"qr\",\n  \"medium\": \"folleto\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Métricas del QR (ADMIN)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/campaign-metrics?campaign=folleto_comercial&from=2026-10-13",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "campaign-metrics"
+              ],
+              "query": [
+                {
+                  "key": "campaign",
+                  "value": "folleto_comercial"
+                },
+                {
+                  "key": "from",
+                  "value": "2026-10-13"
+                }
+              ]
+            },
+            "description": "DMO-035. Inicia sesión como administrador antes (carpeta 01)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     }
   ],
   "variable": [

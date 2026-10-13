@@ -7,6 +7,7 @@ use PymeHub\Core\ApiException;
 use PymeHub\Core\Audit;
 use PymeHub\Core\Catalogo;
 use PymeHub\Core\Context;
+use PymeHub\Core\Demo;
 use PymeHub\Core\Db;
 use PymeHub\Core\Request;
 use PymeHub\Core\Response;
@@ -45,6 +46,9 @@ final class EmpleadoController
         $iid = Context::interlocutorId();
         EmpleadoService::validarEquipo($in['equipo_id'] ?? null, $iid);
         EmpleadoService::validarCodigoLibre($in['codigo_interno'] ?? null, $iid);
+        if (Demo::enSesion() && !empty($in['email'])) {
+            throw new ApiException('PH-DEMO-001', 'Acción no disponible en la demostración: da de alta a la persona sin email', 403);
+        }
         EmpleadoService::validarEmailLibre($in['email'] ?? null);
 
         $id = Db::transaction(static function () use ($in, $iid): int {
@@ -73,6 +77,10 @@ final class EmpleadoController
             if (array_key_exists($c, $in) && $in[$c] === null) {
                 $errores[$c] = 'No puede quedar vacío';
             }
+        }
+        // DMO-024: en la demostración no se cambian correos (ni se guardan correos reales)
+        if (Demo::enSesion() && array_key_exists('email', $in) && $in['email'] !== $emp['email']) {
+            throw new ApiException('PH-DEMO-001', 'Acción no disponible en la demostración', 403);
         }
         if (array_key_exists('email', $in) && $in['email'] !== $emp['email'] && !EmpleadoService::emailEditable($emp['estado_acceso'])) {
             $errores['email'] = 'No se puede cambiar el email de un empleado con la cuenta activa';

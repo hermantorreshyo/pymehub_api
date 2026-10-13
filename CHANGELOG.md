@@ -2,6 +2,48 @@
 
 Formato basado en *Keep a Changelog*; versiones SemVer.
 
+## [0.7.0] · 2026-10-13
+
+**Demo comercial y QR del folleto** (`docs/requerimientos/REQ_QR_DEMO_COMERCIAL.md`). Una sola instalación: la demo se separa de la operativa con `es_demo` dentro de la misma base de datos. **Migración nueva: `0007_demo_comercial`.**
+
+### Base de datos
+- `0007_demo_comercial`: `interlocutor.es_demo` y `usuario.es_demo` (`DMO-022`), marcando las empresas demo existentes, y la tabla `visita_campania` (`DMO-031`) sin IP, User-Agent ni identificadores. Probada en MariaDB 11.8.3 y MySQL.
+
+### Núcleo
+- `Core/Demo`: interruptor `demo.habilitada` y `demo.habilitada_hasta` (`DMO-034`), contraseñas, campañas admitidas y tipo de dispositivo derivado del User-Agent sin guardarlo.
+- `cli/demo_seed.php --reset`, idempotente (`DMO-020`):
+  - toma las contraseñas de `config.php` (`demo.password`, `demo.password_admin`);
+  - solo borra y recrea lo marcado `es_demo = 1`;
+  - conserva el administrador de la plataforma y los `LOGIN_DEMO`.
+- Datos de la demo: fechas relativas a la ejecución (`DMO-021`); Castilla con 48 empleados, 4 equipos y 6 personas en riesgo alto.
+- Asesor: los usuarios demo usan `cache_first` aunque el modo sea `live` (`DMO-NF4`).
+
+### Seguridad
+- `Auth::noDemo()` y `PH-DEMO-001` (`DMO-024`): cuentas de gestión, invitaciones, importación CSV y bajas; además, el alta o cambio de correos de empleados.
+- Login de cuentas demo:
+  - bloqueo **por IP**, con 20 fallos en 15 minutos, nunca de la cuenta (`DMO-025`);
+  - un acierto no borra los fallos de otras personas de la misma IP;
+  - sesiones concurrentes (`DMO-026`).
+- `PH-DEMO-002` con la demo desactivada, también para las sesiones demo abiertas (`DMO-034`).
+- `LOGIN_DEMO` en la auditoría, con el perfil y sin IP (`DMO-033`). `/v1/auth/me` devuelve `demo`.
+- `admin@pymehub.demo` no es demo: es solo para pruebas internas y tiene su propia contraseña (`DMO-028`).
+
+### Endpoints
+- Públicos: `POST /v1/public/visits` (lista blanca y 30 peticiones por minuto e IP, `DMO-030`) y `GET /v1/public/demo-status` (`DMO-037`).
+- `GET /v1/admin/campaign-metrics` (ADMIN, `DMO-035`): totales, por dispositivo, por día y por hora (hora de España), entradas demo por perfil, y primera y última visita.
+
+### Operación
+- Reinicio de la demo cada noche a las 03:30 en `/etc/cron.d/pymehub` (`DMO-027`).
+- Instalador y `config.example.php` con las secciones `demo` y `campaigns`.
+- `tests/smoke_test.sh`: **171 comprobaciones** (15 nuevas), correctas en MariaDB 11.8.3 y MySQL:
+  - argumentos opcionales: la contraseña de la demo y la URL de la web;
+  - nuevas comprobaciones: redirección `/demo`, visitas, `demo-status`, métricas, login demo, sesiones concurrentes, `PH-DEMO-001` y bloqueo por IP;
+  - no suma en las métricas comerciales: usa la campaña `prueba_interna` y la cabecera `X-PymeHub-Prueba`.
+
+### Documentación
+- `docs/requerimientos/REQ_QR_DEMO_COMERCIAL.md` con las notas de implementación.
+- OpenAPI 0.7.0, colección de Postman (carpeta «16 · Demo comercial y QR del folleto»), requisitos v0.9.5 (§16 y §18.1), modelo de datos, manuales 01 y 02 (apartado 8.2), prompt maestro y README.
+
 ## [0.6.0] · 2026-10-12
 
 Avance 5 · **IA de RR. HH.** (fase 7 del plan, §9): motor de riesgo de rotación v1.1, explicado y auditado, con alertas, panel, tendencias, revisión de sesgos y línea base de impacto. **Migración nueva: `0006_riesgo_diario`.**

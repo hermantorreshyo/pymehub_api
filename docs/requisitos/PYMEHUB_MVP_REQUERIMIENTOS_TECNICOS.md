@@ -2,7 +2,7 @@
 
 **Proyecto:** Pyme Hub — TFM EUDE Business School (The Best Team)
 **Documento:** Especificación de requerimientos técnicos del Producto Mínimo Viable (MVP)
-**Versión:** 0.9.4 · 12/10/2026
+**Versión:** 0.9.5 · 13/10/2026
 **Stack:** LAMP nativo, sin Docker (Linux · Apache · **MariaDB 11.8 LTS o MySQL 8.4 LTS** · PHP 8.4). Producción: MariaDB 11.8
 **Repositorios:** dos, independientes: `pymehub_api` (backend tipo API) y `pymehub_web` (frontend que consume la API)
 **Estado:** Alineado con la versión 4 del documento del TFM (carpeta *Revisión 004*). Los cambios que este documento obliga a trasladar al TFM se listan en §22.3.
@@ -24,6 +24,7 @@
 | 0.9.3 | 12/10/2026 | Fase 6 (Asesor de formación): implementación de §12.5 en §12.7 (objetivos cerrados, perfil no identificativo, caché independiente del avance, orden de los modos, cuotas y PayloadGuard ampliado a datos de salud); `GET /v1/admin/ai-usage` sin contenido |
 | 0.9.2 | 12/10/2026 | Fase 5 (Upskilling): §8.5 con el seguimiento (`GET /v1/training/assignments`), la retirada de asignaciones y el resumen (`GET /v1/training/summary`); §10 con el detalle de `RF-041` a `RF-047` (estado `VENCIDA` calculado, idempotencia del cuestionario sin conexión, reglas de `RF-043` sin datos individuales de bienestar) |
 | 0.9.4 | 12/10/2026 | Fase 7 (IA de RR. HH.): §8.4 con `GET /v1/risk/bias` y `GET/PUT /v1/baseline`; §9.6 con la implementación (puntuación diaria, alerta solo al pasar a alto, recálculo limitado, retrospectiva, línea base homogénea en ausencias injustificadas, cron de sesgos) |
+| 0.9.5 | 13/10/2026 | Demo comercial y QR del folleto (`docs/requerimientos/REQ_QR_DEMO_COMERCIAL.md`, `DMO-*`): §18.1 con la ruta `/demo`, usuarios demo con restricciones, reinicio nocturno y métricas; `PH-DEMO-001` y `PH-DEMO-002` en §16 |
 
 ---
 
@@ -884,6 +885,8 @@ Coincidencia visual general con el mockup; funciona en escritorio, tableta y mó
 | `PH-AI-002` | 200 | Límite diario de consultas alcanzado: se sirve el respaldo por reglas |
 | `PH-AI-003` | 200 | Respuesta de la IA no válida tras reintento: se sirve el respaldo por reglas |
 | `PH-AI-004` | 422 | La petición contiene datos personales y no se envía |
+| `PH-DEMO-001` | 403 | Acción no disponible en la demostración comercial |
+| `PH-DEMO-002` | 403 | La demostración no está disponible (`demo.habilitada`) |
 | `PH-SYS-001` | 500 | Error interno (con `correlation_id`) |
 | `PH-SYS-002` | 503 | Base de datos no disponible |
 | `PH-SYS-003` | 503 | Plataforma en mantenimiento programado |
@@ -947,6 +950,16 @@ Coincidencia visual general con el mockup; funciona en escritorio, tableta y mó
 - `RF-101` (M) Los datos de demo permiten tomar las **cinco capturas del Anexo D del TFM** (Figuras D2 a D6): panel del gerente con indicadores y alertas, ficha de empleado con el riesgo explicado, check-in en el móvil, micro-formación con cuestionario y asesor de formación.
 
 ---
+
+### 18.1 Demo comercial y QR del folleto (v0.7.0)
+
+Requerimiento completo en `docs/requerimientos/REQ_QR_DEMO_COMERCIAL.md` (`DMO-001` a `DMO-037`, `DMO-NF1` a `DMO-NF6`).
+
+- **Ruta estable del QR:** `https://pymehub.hermantorres.com/demo` responde 302 a la landing en modo demo. La regla está en el `.htaccess` de la web.
+- **Landing en modo demo:** franja comercial y panel «Pruebe Pyme Hub» con los usuarios de la empresa de ejemplo. «Entrar como …» abre el login de siempre con el correo ya escrito.
+- **Separación de la operativa:** misma instalación y misma base de datos. Las empresas y personas de la demo llevan `es_demo = 1` (migración `0007`); el reinicio nocturno (03:30) solo regenera lo marcado.
+- **Usuarios demo:** contraseña pública `demo.password` y restricciones `PH-DEMO-001`. El bloqueo es por IP, con 20 fallos en 15 minutos, y se admiten sesiones concurrentes. El interruptor `demo.habilitada` responde `PH-DEMO-002` sin desplegar.
+- **Métricas sin datos personales:** visitas de campaña sin cookies, IP ni User-Agent (`POST /v1/public/visits`, tabla `visita_campania`), inicios de sesión `LOGIN_DEMO` en la auditoría, y la tarjeta «QR del folleto» del administrador (`GET /v1/admin/campaign-metrics`).
 
 ## 19. Requerimientos no funcionales adicionales
 

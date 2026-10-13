@@ -107,9 +107,9 @@ erDiagram
 |---|---|---|
 | `cat_tipo_interlocutor` | Tipos de actor | `PLATAFORMA`, `EMPRESA`, `FORMADOR` |
 | `cat_perfil` | Perfiles admitidos por tipo | |
-| `interlocutor` | Todos los actores | Estado `PILOTO`, `ACTIVO`, `SUSPENDIDO`, `BAJA` |
+| `interlocutor` | Todos los actores | Estado `PILOTO`, `ACTIVO`, `SUSPENDIDO`, `BAJA`. `es_demo` (0007): empresa de la demo comercial, que el reinicio nocturno regenera |
 | `suscripcion` | Plan y ciclo de cobro de una empresa | Histórico; una vigente |
-| `usuario` | Personas con perfil | Email único global; contraseña Argon2id |
+| `usuario` | Personas con perfil | Email único global; contraseña Argon2id. `es_demo` (0007): cuenta de la demo comercial, con restricciones `PH-DEMO-001` y bloqueo por IP |
 | `invitacion` | Enlaces de un solo uso | Solo se guarda el hash SHA-256; 72 h |
 | `equipo` | Equipos de la empresa | Nombre único entre los vigentes; no se borra si tiene empleados de alta |
 | `ficha_laboral` | Datos laborales del empleado | `motivo_baja` permite medir la rotación voluntaria |
@@ -124,7 +124,8 @@ erDiagram
 | `linea_base` | Rotación y absentismo previos al alta | RF-037. Una vigente por empresa (`PUT /v1/baseline` la sustituye). `dias_absentismo` son días de ausencia injustificada, la misma medida que `incidencia`, para comparar en homogéneo |
 | `solicitud_ia` | Registro de consultas al asesor | Sin contenido; solo hash, origen (`LIVE`, `CACHE`, `REGLAS`), aviso servido (0005), tokens, latencia y valoración útil/no útil |
 | `respuesta_ia` | Caché del asesor (0005, `IA-014`) | Clave: hash de la entrada normalizada (perfil no identificativo, preferencias, catálogo y versión del prompt). Solo la salida validada; 7 días, sin caducidad las pregeneradas para la demo (`cli/ai_warmup.php`) |
-| `registro_auditoria` | Acciones sensibles | Solo inserción |
+| `registro_auditoria` | Acciones sensibles | Solo inserción. `LOGIN_DEMO` (con el perfil en `entidad` y sin IP) cuenta las entradas en la demo comercial y se conserva al reiniciarla |
+| `visita_campania` | Visitas de campaña (QR del folleto) | 0007. Campaña, origen, medio, dispositivo (`MOVIL`, `ESCRITORIO`, `OTRO`) y fecha. Sin IP, User-Agent ni identificadores: no hay datos personales |
 | `limite_peticion` | Limitación de peticiones | |
 | `migracion_esquema` | Versiones aplicadas | La crea el migrador |
 

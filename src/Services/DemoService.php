@@ -14,8 +14,10 @@ use PymeHub\Repositories\ModuloRepository;
  * - «Reparto Rápido Castilla S.L.»: plan Completo, 48 empleados en 4 equipos (Zona Norte,
  *   Zona Sur, Nocturno, Almacén), con el equipo Nocturno empeorando en estrés.
  * - «Mensajería Tajo S.L.»: plan Entrada, 15 empleados en 2 equipos.
- * - Usuarios de acceso: admin@, gerente@, rrhh@ y conductor@ (Castilla) y gerente2@ (Tajo),
- *   en el dominio ficticio pymehub.demo, todos con la contraseña indicada al generar.
+ * - Usuarios de acceso de la demo comercial (es_demo = 1, REQ_QR_DEMO_COMERCIAL §4.1): gerente@, rrhh@
+ *   y conductor@ (Castilla) y gerente2@ (Tajo), en el dominio ficticio pymehub.demo, con la
+ *   contraseña de config demo.password. admin@ es de la plataforma, no es demo y tiene su propia
+ *   contraseña (demo.password_admin); el reinicio no lo borra.
  *
  * Cada fase añade aquí sus datos (fase 4: bienestar; fase 5: incidencias y formación; fase 6: asesor;
  * fase 7: bajas, riesgo de rotación con histórico semanal, alertas y línea base).
@@ -67,7 +69,12 @@ final class DemoService
     private int $seq = 0;
 
     /** @param string $password contraseña común de los usuarios de acceso (mínimo 10 caracteres) */
-    public function __construct(private readonly string $password, private readonly int $semilla = 2026)
+    /**
+     * @param string      $password      contraseña común de los usuarios demo (config demo.password, DMO-023)
+     * @param string|null $passwordAdmin contraseña de admin@pymehub.demo (config demo.password_admin, DMO-028);
+     *                                   null = no se crea ni se cambia el administrador
+     */
+    public function __construct(private readonly string $password, private readonly int $semilla = 2026, private readonly ?string $passwordAdmin = null)
     {
         $this->hash = password_hash($password, PASSWORD_ARGON2ID);
     }
@@ -75,7 +82,7 @@ final class DemoService
     /** ¿Existen ya las empresas de demostración? */
     public static function existe(): bool
     {
-        return Db::value('SELECT 1 FROM interlocutor WHERE nif IN (?, ?) LIMIT 1', [self::NIF_CASTILLA, self::NIF_TAJO]) !== null;
+        return Db::value('SELECT 1 FROM interlocutor WHERE es_demo = 1 OR nif IN (?, ?) LIMIT 1', [self::NIF_CASTILLA, self::NIF_TAJO]) !== null;
     }
 
     /**
@@ -84,10 +91,15 @@ final class DemoService
      */
     public static function borrar(): void
     {
-        $ids = array_map('intval', array_column(Db::all('SELECT id FROM interlocutor WHERE nif IN (?, ?)', [self::NIF_CASTILLA, self::NIF_TAJO]), 'id'));
+        // Solo lo marcado como demo (DMO-020, DMO-022). El administrador de la plataforma no es demo
+        // y se conserva (DMO-028).
+        $ids = array_map('intval', array_column(Db::all(
+            "SELECT id FROM interlocutor WHERE tipo = 'EMPRESA' AND (es_demo = 1 OR nif IN (?, ?))",
+            [self::NIF_CASTILLA, self::NIF_TAJO]
+        ), 'id'));
         $usuarios = array_map('intval', array_column(Db::all(
-            'SELECT id FROM usuario WHERE email LIKE ?' . ($ids === [] ? '' : ' OR interlocutor_id IN (' . implode(',', $ids) . ')'),
-            ['%@' . self::DOMINIO]
+            "SELECT id FROM usuario WHERE perfil <> 'ADMIN' AND (es_demo = 1"
+            . ($ids === [] ? '' : ' OR interlocutor_id IN (' . implode(',', $ids) . ')') . ')'
         ), 'id'));
         if ($ids === [] && $usuarios === []) {
             return;
@@ -103,6 +115,12 @@ final class DemoService
         $pdo = Db::pdo();
         $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
         try {
+            // Los inicios de sesión demo (DMO-033) son métricas comerciales: se conservan sin
+            // referencias a las personas que se van a borrar
+            if ($usuarios !== []) {
+                $pdo->exec("UPDATE registro_auditoria SET usuario_id = NULL, interlocutor_id = NULL, entidad_id = NULL
+                             WHERE accion = 'LOGIN_DEMO' AND usuario_id IN (" . implode(',', $usuarios) . ')');
+            }
             foreach ($tablas as $t) {
                 $tabla = preg_replace('/[^a-z_]/', '', (string) $t['t']);
                 if ((int) $t['por_interlocutor'] > 0 && $ids !== []) {
@@ -193,25 +211,32 @@ final class DemoService
 
     /* ------------------------------------------------------------------ */
 
+    /** admin@pymehub.demo: solo pruebas internas, no es demo ni aparece en el panel público (DMO-028). */
     private function admin(): void
     {
+        if ($this->passwordAdmin === null) {
+            return;
+        }
         $email = 'admin@' . self::DOMINIO;
-        if (Db::value('SELECT 1 FROM usuario WHERE email = ?', [$email]) !== null) {
+        $hash = password_hash($this->passwordAdmin, PASSWORD_ARGON2ID);
+        $id = Db::value('SELECT id FROM usuario WHERE email = ?', [$email]);
+        if ($id !== null) {
+            Db::run("UPDATE usuario SET password_hash = ?, estado_acceso = 'ACTIVO', es_demo = 0 WHERE id = ?", [$hash, $id]);
             return;
         }
         $plataforma = (int) Db::value("SELECT id FROM interlocutor WHERE tipo = 'PLATAFORMA'");
         Db::insert(
             "INSERT INTO usuario (interlocutor_id, tipo_interlocutor, perfil, nombre, apellidos, email, password_hash, estado_acceso, privacidad_aceptada_en)
              VALUES (?, 'PLATAFORMA', 'ADMIN', 'Administración', 'Pyme Hub', ?, ?, 'ACTIVO', UTC_TIMESTAMP())",
-            [$plataforma, $email, $this->hash]
+            [$plataforma, $email, $hash]
         );
     }
 
     private function empresa(string $nombre, string $comercial, string $nif, string $plan, string $ciclo, int $limite): int
     {
         $id = Db::insert(
-            "INSERT INTO interlocutor (tipo, nombre, nombre_comercial, nif, sector, email_contacto, fecha_contrato_encargado, estado)
-             VALUES ('EMPRESA', ?, ?, ?, 'Logística de última milla', ?, ?, 'PILOTO')",
+            "INSERT INTO interlocutor (tipo, nombre, nombre_comercial, nif, sector, email_contacto, fecha_contrato_encargado, estado, es_demo)
+             VALUES ('EMPRESA', ?, ?, ?, 'Logística de última milla', ?, ?, 'PILOTO', 1)",
             [$nombre, $comercial, $nif, 'contacto@' . self::DOMINIO, Tiempo::dia(-120)]
         );
         Db::insert(
@@ -225,8 +250,8 @@ final class DemoService
     private function acceso(int $empresa, string $perfil, string $nombre, string $apellidos, string $email): int
     {
         return Db::insert(
-            "INSERT INTO usuario (interlocutor_id, tipo_interlocutor, perfil, nombre, apellidos, email, password_hash, estado_acceso, privacidad_aceptada_en)
-             VALUES (?, 'EMPRESA', ?, ?, ?, ?, ?, 'ACTIVO', UTC_TIMESTAMP())",
+            "INSERT INTO usuario (interlocutor_id, tipo_interlocutor, perfil, nombre, apellidos, email, password_hash, estado_acceso, privacidad_aceptada_en, es_demo)
+             VALUES (?, 'EMPRESA', ?, ?, ?, ?, ?, 'ACTIVO', UTC_TIMESTAMP(), 1)",
             [$empresa, $perfil, $nombre, $apellidos, $email, $this->hash]
         );
     }
@@ -262,8 +287,8 @@ final class DemoService
         // Todos activos para que puedan hacer check-in; solo los de acceso tienen una contraseña conocida
         $hash = $conAcceso ? $this->hash : password_hash(bin2hex(random_bytes(16)), PASSWORD_ARGON2ID, ['memory_cost' => 8192, 'time_cost' => 1]);
         $id = Db::insert(
-            "INSERT INTO usuario (interlocutor_id, tipo_interlocutor, perfil, nombre, apellidos, email, password_hash, estado_acceso, privacidad_aceptada_en)
-             VALUES (?, 'EMPRESA', 'EMPLEADO', ?, ?, ?, ?, 'ACTIVO', UTC_TIMESTAMP())",
+            "INSERT INTO usuario (interlocutor_id, tipo_interlocutor, perfil, nombre, apellidos, email, password_hash, estado_acceso, privacidad_aceptada_en, es_demo)
+             VALUES (?, 'EMPRESA', 'EMPLEADO', ?, ?, ?, ?, 'ACTIVO', UTC_TIMESTAMP(), 1)",
             [$empresa, $nombre, $apellidos, $email, $hash]
         );
         Db::insert(
@@ -591,8 +616,8 @@ final class DemoService
             $contrato = $voluntaria ? (['TEMPORAL', 'ETT', 'TEMPORAL', 'INDEFINIDO'][mt_rand(0, 3)]) : ($motivo === 'FIN_CONTRATO' ? 'TEMPORAL' : 'INDEFINIDO');
             $email = 'ex.' . $this->slug($nom) . '.' . (++$this->seq) . '@antiguos.' . self::DOMINIO;
             $id = Db::insert(
-                "INSERT INTO usuario (interlocutor_id, tipo_interlocutor, perfil, nombre, apellidos, email, password_hash, estado_acceso)
-                 VALUES (?, 'EMPRESA', 'EMPLEADO', ?, ?, ?, NULL, 'BAJA')",
+                "INSERT INTO usuario (interlocutor_id, tipo_interlocutor, perfil, nombre, apellidos, email, password_hash, estado_acceso, es_demo)
+                 VALUES (?, 'EMPRESA', 'EMPLEADO', ?, ?, ?, NULL, 'BAJA', 1)",
                 [$empresa, $nom, $ape, $email]
             );
             Db::insert(

@@ -13,6 +13,7 @@ use PymeHub\Controllers\V1\FormacionController as Formacion;
 use PymeHub\Controllers\V1\HealthController as Health;
 use PymeHub\Controllers\V1\IncidenciaController as Incidencias;
 use PymeHub\Controllers\V1\MiFormacionController as MiFormacion;
+use PymeHub\Controllers\V1\PublicoController as Publico;
 use PymeHub\Controllers\V1\RiesgoController as Riesgo;
 use PymeHub\Controllers\V1\UsuarioController as Usuarios;
 use PymeHub\Core\Router;
@@ -23,6 +24,7 @@ use PymeHub\Middleware\Auth;
  */
 return static function (Router $r): void {
     $csrf    = Auth::csrf();
+    $noDemo  = Auth::noDemo();   // DMO-024: PH-DEMO-001 para usuarios de la demostración
     $logged  = Auth::require();
     $admin   = Auth::require('ADMIN');
     $gerente = Auth::require('GERENTE');
@@ -37,6 +39,10 @@ return static function (Router $r): void {
     // Salud (pública)
     $r->add('GET', '/v1/health', [Health::class, 'show']);
 
+    // Público: demo comercial y métricas del QR (REQ_QR_DEMO_COMERCIAL)
+    $r->add('POST', '/v1/public/visits', [Publico::class, 'visit']);
+    $r->add('GET',  '/v1/public/demo-status', [Publico::class, 'demoStatus']);
+
     // Autenticación
     $r->add('POST', '/v1/auth/login', [AuthC::class, 'login']);
     $r->add('POST', '/v1/auth/invitations/accept', [AuthC::class, 'acceptInvitation']);
@@ -50,13 +56,14 @@ return static function (Router $r): void {
     $r->add('PATCH', '/v1/admin/tenants/{id}', [Empresas::class, 'update'], [$admin, $csrf]);
     $r->add('GET',   '/v1/admin/metrics', [Empresas::class, 'metrics'], [$admin]);
     $r->add('GET',   '/v1/admin/ai-usage', [Asesor::class, 'usage'], [$admin]);
+    $r->add('GET',   '/v1/admin/campaign-metrics', [Publico::class, 'metrics'], [$admin]);
 
     // Cuentas de RR. HH. (solo gerente)
     $r->add('GET',    '/v1/users', [Usuarios::class, 'index'], [$gerente]);
-    $r->add('POST',   '/v1/users', [Usuarios::class, 'store'], [$gerente, $csrf]);
-    $r->add('PATCH',  '/v1/users/{id}', [Usuarios::class, 'update'], [$gerente, $csrf]);
-    $r->add('DELETE', '/v1/users/{id}', [Usuarios::class, 'destroy'], [$gerente, $csrf]);
-    $r->add('POST',   '/v1/users/{id}/invitation', [Usuarios::class, 'invite'], [$gerente, $csrf]);
+    $r->add('POST',   '/v1/users', [Usuarios::class, 'store'], [$gerente, $noDemo, $csrf]);
+    $r->add('PATCH',  '/v1/users/{id}', [Usuarios::class, 'update'], [$gerente, $noDemo, $csrf]);
+    $r->add('DELETE', '/v1/users/{id}', [Usuarios::class, 'destroy'], [$gerente, $noDemo, $csrf]);
+    $r->add('POST',   '/v1/users/{id}/invitation', [Usuarios::class, 'invite'], [$gerente, $noDemo, $csrf]);
 
     // Equipos: el gerente los gestiona, RR. HH. los ve (P-10)
     $r->add('GET',    '/v1/teams', [Equipos::class, 'index'], [$gestion]);
@@ -67,11 +74,11 @@ return static function (Router $r): void {
     // Empleados, invitaciones, CSV e incidencias: gerente y RR. HH. (P-10)
     $r->add('GET',    '/v1/employees', [Empleados::class, 'index'], [$gestion]);
     $r->add('POST',   '/v1/employees', [Empleados::class, 'store'], [$gestion, $csrf]);
-    $r->add('POST',   '/v1/employees/import', [Empleados::class, 'import'], [$gestion, $csrf]);
+    $r->add('POST',   '/v1/employees/import', [Empleados::class, 'import'], [$gestion, $noDemo, $csrf]);
     $r->add('GET',    '/v1/employees/{id}', [Empleados::class, 'show'], [$gestion]);
     $r->add('PATCH',  '/v1/employees/{id}', [Empleados::class, 'update'], [$gestion, $csrf]);
-    $r->add('DELETE', '/v1/employees/{id}', [Empleados::class, 'destroy'], [$gestion, $csrf]);
-    $r->add('POST',   '/v1/employees/{id}/invitation', [Empleados::class, 'invite'], [$gestion, $csrf]);
+    $r->add('DELETE', '/v1/employees/{id}', [Empleados::class, 'destroy'], [$gestion, $noDemo, $csrf]);
+    $r->add('POST',   '/v1/employees/{id}/invitation', [Empleados::class, 'invite'], [$gestion, $noDemo, $csrf]);
     $r->add('GET',    '/v1/employees/{id}/incidents', [Incidencias::class, 'index'], [$gestion]);
     $r->add('POST',   '/v1/employees/{id}/incidents', [Incidencias::class, 'store'], [$gestion, $csrf]);
 

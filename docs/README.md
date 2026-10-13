@@ -4,6 +4,7 @@
 |---|---|
 | [`PROMPT_MAESTRO.md`](PROMPT_MAESTRO.md) | Prompt maestro para iniciar o retomar el desarrollo con un asistente de IA (igual en ambos repositorios) |
 | [`requisitos/`](requisitos/) | Requisitos técnicos del MVP (fuente de verdad) |
+| [`requerimientos/`](requerimientos/) | Requerimientos puntuales posteriores, con sus notas de implementación (p. ej. `REQ_QR_DEMO_COMERCIAL.md`, demo comercial y QR del folleto) |
 | [`openapi.yaml`](openapi.yaml) | Contrato con el frontend (`DEC-13`) |
 | [`coleccion/`](coleccion/) | Colección de Postman de la API y entornos local y producción |
 | [`hoja_tecnica_modelo_riesgo.md`](hoja_tecnica_modelo_riesgo.md) | Hoja técnica del motor de riesgo de rotación v1.1: datos, reglas, fuentes, AI Act, revisión de sesgos, validación y limitaciones (`RF-035`, `LEG-006`, `LEG-015`) |

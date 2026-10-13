@@ -1,12 +1,14 @@
 openapi: 3.1.0
 info:
   title: Pyme Hub API
-  version: 0.6.0
+  version: 0.7.0
   description: |
     Contrato entre pymehub_api y pymehub_web (DEC-13).
     Autenticación por cookie de sesión HttpOnly. Toda petición que modifica datos
     exige la cabecera X-CSRF-Token con el valor devuelto por /v1/auth/me o /v1/auth/login.
     Errores: { "error": { "code": "PH-…", "message", "details", "correlation_id" } }.
+    Demo comercial (docs/requerimientos/REQ_QR_DEMO_COMERCIAL.md): PH-DEMO-001 (403) acción no disponible
+    para usuarios demo; PH-DEMO-002 (403) demostración desactivada (config demo.habilitada).
     Listados paginados: ?page=&per_page= (máx. 100); meta = { total, page, per_page }.
 servers:
   - url: https://api.pymehub.hermantorres.com
@@ -51,6 +53,7 @@ components:
             estado: { type: string }
         plan: { type: [string, "null"], enum: [ENTRADA, COMPLETO, null] }
         features: { type: array, items: { type: string } }
+        demo: { type: boolean, description: 'Cuenta de la demostración comercial (es_demo). Sus restricciones devuelven PH-DEMO-001; con la demo desactivada, PH-DEMO-002' }
         csrf_token: { type: string }
         sesion:
           type: object
@@ -1332,6 +1335,44 @@ paths:
       responses:
         '200': { content: { application/json: { schema: { $ref: '#/components/schemas/LineaBase' } } }, description: ok }
         '422': { description: PH-VAL-001 }
+  /v1/public/visits:
+    post:
+      summary: Visita de una campaña comercial (público · DMO-030)
+      description: Sin sesión ni CSRF. Cuenta visitas, no visitantes. No guarda IP, User-Agent completo ni identificadores; el dispositivo (MOVIL, ESCRITORIO, OTRO) se deriva del User-Agent en el servidor. Campañas admitidas en config.php (`campaigns`) más `prueba_interna` para las pruebas automáticas. Límite de 30 peticiones por minuto e IP.
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [campaign, source, medium]
+              additionalProperties: false
+              properties:
+                campaign: { type: string, example: folleto_comercial }
+                source: { type: string, pattern: '^[a-z0-9_-]{1,40}$', example: qr }
+                medium: { type: string, pattern: '^[a-z0-9_-]{1,40}$', example: folleto }
+      responses:
+        '204': { description: Visita registrada }
+        '422': { description: PH-VAL-001 (campaña no admitida o campo no declarado) }
+        '429': { description: PH-RATE-001 }
+  /v1/public/demo-status:
+    get:
+      summary: ¿Está disponible la demostración? (público · DMO-037)
+      security: []
+      responses:
+        '200': { description: 'data = { enabled }. Sin credenciales.' }
+  /v1/admin/campaign-metrics:
+    get:
+      summary: Métricas del QR del folleto (ADMIN · DMO-035)
+      description: Fechas en hora de España, ambas incluidas; sin `from`, desde la primera visita. Los inicios de sesión demo salen del registro de auditoría (`LOGIN_DEMO`).
+      security: [{ sesion: [] }]
+      parameters:
+        - { name: campaign, in: query, schema: { type: string, default: folleto_comercial } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+      responses:
+        '200': { description: 'data = { campania, visitas, por_dispositivo: { MOVIL, ESCRITORIO, OTRO }, por_dia[{ fecha, visitas }], por_hora[{ hora, visitas }], logins_demo: { total, por_perfil: { GERENTE, RRHH, EMPLEADO } }, primera_visita, ultima_visita }; meta = { desde, hasta, zona, campanias, demo: { habilitada } }' }
+        '403': { description: PH-PERM-001 }
   /v1/alerts:
     get:
       summary: Alertas de la empresa (GERENTE, RRHH · §8.4)

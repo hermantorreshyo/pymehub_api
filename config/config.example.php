@@ -33,4 +33,12 @@ return [
         'api_key'  => '',
         'mode'     => 'offline', // live | cache_first | offline
     ],
+    // Demostración comercial y QR del folleto (docs/requerimientos/REQ_QR_DEMO_COMERCIAL.md)
+    'demo' => [
+        'habilitada'       => true,           // false = la demo se apaga sin desplegar (PH-DEMO-002)
+        'habilitada_hasta' => null,           // 'AAAA-MM-DD' (incluido) o null, sin caducidad
+        'password'         => 'PymeHub-Demo', // impresa en el folleto: gerente@, rrhh@, conductor@ y gerente2@
+        'password_admin'   => 'CAMBIAR',      // admin@pymehub.demo, solo pruebas internas: nunca se publica
+    ],
+    'campaigns' => ['folleto_comercial'],     // campañas admitidas en POST /v1/public/visits
 ];

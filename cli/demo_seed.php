@@ -2,16 +2,21 @@
 declare(strict_types=1);
 
 /**
- * Datos de demostración para la defensa del TFM (§18, RF-100). Solo datos ficticios (LEG-009).
+ * Datos de la demostración comercial (§18, RF-100, REQ_QR_DEMO_COMERCIAL). Solo datos ficticios (LEG-009).
  *
  * Uso:
- *   php cli/demo_seed.php --password='Contraseña-de-la-demo'          crea los datos
- *   php cli/demo_seed.php --password='…' --reset                      los borra y los vuelve a crear
- *   php cli/demo_seed.php --borrar                                    solo los borra
+ *   php cli/demo_seed.php                 crea los datos con las contraseñas de config.php
+ *   php cli/demo_seed.php --reset         los borra y los vuelve a crear (idempotente, DMO-020);
+ *                                         es lo que ejecuta el cron cada noche a las 03:30 (DMO-027)
+ *   php cli/demo_seed.php --borrar        solo los borra
+ *   --password='…' y --password-admin='…' sustituyen a las de config.php
  *
- * Usuarios (todos con la misma contraseña): admin@pymehub.demo, gerente@pymehub.demo,
- * rrhh@pymehub.demo, conductor@pymehub.demo (Castilla) y gerente2@pymehub.demo (Tajo).
- * La contraseña no se guarda en ningún sitio: entrégala al tribunal por separado.
+ * Contraseñas en config/config.php (no versionado):
+ *   'demo' => ['password' => 'PymeHub-Demo', 'password_admin' => '…', …]
+ * Usuarios demo (es_demo = 1, contraseña demo.password): gerente@, rrhh@ y conductor@ (Castilla)
+ * y gerente2@ (Tajo), en pymehub.demo. admin@pymehub.demo no es demo (demo.password_admin): sin
+ * esa contraseña no se crea ni se cambia, y el reinicio nunca lo borra.
+ * Solo borra y recrea las empresas y personas marcadas con es_demo = 1.
  */
 if (PHP_SAPI !== 'cli') {
     exit(1);
@@ -19,22 +24,28 @@ if (PHP_SAPI !== 'cli') {
 require dirname(__DIR__) . '/src/bootstrap.php';
 
 use PymeHub\Core\Config;
+use PymeHub\Core\Demo;
 use PymeHub\Services\DemoService;
 
 if (!Config::isInstalled()) {
     fwrite(STDERR, "La API no está instalada.\n");
     exit(1);
 }
-$opts = getopt('', ['password:', 'reset', 'borrar']);
+$opts = getopt('', ['password:', 'password-admin:', 'reset', 'borrar']);
 
 if (isset($opts['borrar'])) {
     DemoService::borrar();
     echo "Datos de demostración borrados.\n";
     exit(0);
 }
-$password = (string) ($opts['password'] ?? '');
+$password = (string) ($opts['password'] ?? Demo::password() ?? '');
 if (mb_strlen($password) < 10) {
-    fwrite(STDERR, "Indica --password con al menos 10 caracteres.\n");
+    fwrite(STDERR, "Falta la contraseña de la demo (mínimo 10 caracteres): añade 'demo' => ['password' => …] en config/config.php o usa --password.\n");
+    exit(1);
+}
+$passwordAdmin = $opts['password-admin'] ?? Demo::passwordAdmin();
+if ($passwordAdmin !== null && mb_strlen((string) $passwordAdmin) < 10) {
+    fwrite(STDERR, "La contraseña del administrador demo debe tener al menos 10 caracteres.\n");
     exit(1);
 }
 if (DemoService::existe()) {
@@ -45,7 +56,7 @@ if (DemoService::existe()) {
     DemoService::borrar();
     echo "Datos anteriores borrados.\n";
 }
-$r = (new DemoService($password))->generar();
+$r = (new DemoService($password, 2026, $passwordAdmin === null ? null : (string) $passwordAdmin))->generar();
 echo "Reparto Rápido Castilla S.L. (Completo): {$r['castilla']['empleados']} empleados\n";
 echo "Mensajería Tajo S.L. (Entrada): {$r['tajo']['empleados']} empleados\n";
 echo "Check-ins de bienestar: {$r['checkins']}\n";
@@ -55,5 +66,9 @@ echo "Formación asignada o en curso: {$r['formacion']}\n";
 echo "Preferencias para el asesor: {$r['preferencias']}\n";
 echo "Bajas de los últimos 12 meses: {$r['bajas']}\n";
 echo "Riesgo de rotación (Castilla): {$r['riesgo']['alto']} en nivel alto, {$r['riesgo']['medio']} en medio, {$r['riesgo']['alertas']} alertas, {$r['riesgo']['puntuaciones']} puntuaciones históricas\n";
-echo "Usuarios: admin@, gerente@, rrhh@, conductor@ y gerente2@ " . DemoService::DOMINIO . "\n";
+echo "Usuarios demo: gerente@, rrhh@, conductor@ y gerente2@ (dominio " . DemoService::DOMINIO . ")\n";
+echo $passwordAdmin === null
+    ? "admin@" . DemoService::DOMINIO . ": sin cambios (no hay demo.password_admin en config.php)\n"
+    : "admin@" . DemoService::DOMINIO . ": contraseña de demo.password_admin\n";
+echo 'Demostración ' . (Demo::habilitada() ? 'habilitada' : 'DESACTIVADA (demo.habilitada)') . "\n";
 echo "Asesor con IA: si hay clave de Mistral en config.php, pregenera las respuestas con php cli/ai_warmup.php\n";

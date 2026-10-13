@@ -189,6 +189,10 @@ final class Installer
                 'api_key'  => $in['ia_api_key'],
                 'mode'     => $in['ia_api_key'] === '' ? 'offline' : $in['ia_mode'],
             ],
+            // Demostración comercial (REQ_QR_DEMO_COMERCIAL): contraseña impresa en el folleto.
+            // password_admin se añade a mano si se quiere el administrador de pruebas internas.
+            'demo' => ['habilitada' => true, 'habilitada_hasta' => null, 'password' => 'PymeHub-Demo', 'password_admin' => null],
+            'campaigns' => ['folleto_comercial'],
         ];
         $php = "<?php\n// Generado por el instalador el " . gmdate('c') . ". NO versionar.\nreturn " . var_export($config, true) . ";\n";
         $cfgPath = PH_ROOT . '/config/config.php';

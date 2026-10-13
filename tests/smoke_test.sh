@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
-# Prueba de humo de Pyme Hub API (fases 0-7).
-# Uso: tests/smoke_test.sh <URL_API> <ORIGEN_FRONTEND> <EMAIL_ADMIN> <PASSWORD_ADMIN>
+# Prueba de humo de Pyme Hub API (fases 0-7 y demo comercial).
+# Uso: tests/smoke_test.sh <URL_API> <ORIGEN_FRONTEND> <EMAIL_ADMIN> <PASSWORD_ADMIN> [PASSWORD_DEMO] [URL_WEB]
+#   PASSWORD_DEMO: contraseña de los usuarios demo (config demo.password). Sin ella se saltan las
+#                  comprobaciones de inicio de sesión demo.
+#   URL_WEB: dónde comprobar la redirección /demo (por defecto, ORIGEN_FRONTEND).
 # Crea dos empresas de prueba con NIF y emails aleatorios. No usar en producción con datos reales.
 set -uo pipefail
 B="${1:?URL de la API}"; ORIGIN="${2:?Origen del frontend}"; AE="${3:?email admin}"; AP="${4:?password admin}"
+DP="${5:-}"; WEB="${6:-$ORIGIN}"
 J='Content-Type: application/json'; T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 R=$RANDOM$RANDOM; PASS=0; FAIL=0
 jq_(){ python3 -c "import sys,json
@@ -266,6 +270,34 @@ check "baja con motivo y sin acceso" "$(send h DELETE "$CH" "/v1/employees/$EID"
 check "ficha de baja en solo lectura -> PH-VAL-001" "$(send h PATCH "$CH" "/v1/employees/$EID" '{"turno":"NOCHE"}' | code)" "PH-VAL-001"
 check "la baja sale de la lista de altas" "$(total h /v1/employees)" "3"
 check "y aparece en las bajas" "$(total h '/v1/employees?situacion=BAJA')" "1"
+
+echo "== Demo comercial y QR del folleto (REQ_QR_DEMO_COMERCIAL)"
+RD=$(curl -s -o /dev/null -D - "$WEB/demo")
+check "/demo -> 302 a la landing en modo demo (DMO-001)" "$(printf '%s' "$RD" | head -1 | awk '{print $2}') $(printf '%s' "$RD" | grep -ic '^location:.*modo=demo')" "302 1"
+check "/demo sin caché (DMO-001)" "$(printf '%s' "$RD" | grep -ic '^cache-control:.*no-store')" "1"
+check "estado de la demo (DMO-037)" "$(curl -s "$B/v1/public/demo-status" | jq_ "d['data']['enabled']")" "True"
+check "visita de campaña -> 204 (DMO-030)" "$(curl -s -o /dev/null -w '%{http_code}' -H "$J" -A 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0)' "$B/v1/public/visits" -d '{"campaign":"prueba_interna","source":"qr","medium":"folleto"}')" "204"
+check "campaña no admitida -> PH-VAL-001" "$(curl -s -H "$J" "$B/v1/public/visits" -d '{"campaign":"otra","source":"qr","medium":"folleto"}' | code)" "PH-VAL-001"
+check "campo no declarado -> PH-VAL-001" "$(curl -s -H "$J" "$B/v1/public/visits" -d '{"campaign":"prueba_interna","source":"qr","medium":"folleto","ip":"1.2.3.4"}' | code)" "PH-VAL-001"
+check "métricas del QR para la plataforma (DMO-035)" "$(curl -s -b "$T/a" "$B/v1/admin/campaign-metrics?campaign=prueba_interna" | jq_ "d['data']['visitas'] >= 1 and d['data']['por_dispositivo']['MOVIL'] >= 1 and len(d['data']['por_hora']) == 24")" "True"
+check "la gestión no ve las métricas -> PH-PERM-001" "$(curl -s -b "$T/h" "$B/v1/admin/campaign-metrics" | code)" "PH-PERM-001"
+if [ -n "$DP" ]; then
+  P='X-PymeHub-Prueba: 1'
+  curl -s -c "$T/d1" -H "$J" -H "$P" "$B/v1/auth/login" -d "{\"email\":\"gerente@pymehub.demo\",\"password\":\"$DP\"}" > "$T/d1.json"
+  check "login demo de gerente@ (DMO-023)" "$(jq_ "d['data']['usuario']['perfil']+' '+str(d['data']['demo'])" < "$T/d1.json")" "GERENTE True"
+  CD=$(jq_ "d['data']['csrf_token']" < "$T/d1.json")
+  curl -s -c "$T/d2" -H "$J" -H "$P" "$B/v1/auth/login" -d "{\"email\":\"gerente@pymehub.demo\",\"password\":\"$DP\"}" > /dev/null
+  check "sesiones concurrentes con el mismo usuario demo (DMO-026)" "$(curl -s -b "$T/d1" "$B/v1/auth/me" | jq_ "d['data']['usuario']['perfil']") $(curl -s -b "$T/d2" "$B/v1/auth/me" | jq_ "d['data']['usuario']['perfil']")" "GERENTE GERENTE"
+  check "demo: crear una cuenta de RR. HH. -> PH-DEMO-001 (DMO-024)" "$(curl -s -b "$T/d1" -H "$J" -H "X-CSRF-Token: $CD" "$B/v1/users" -d '{"nombre":"Prueba","email":"x@x.es"}' | code)" "PH-DEMO-001"
+  DE=$(curl -s -b "$T/d1" "$B/v1/employees?per_page=1" | jq_ "d['data'][0]['id']")
+  check "demo: dar de baja a un empleado -> PH-DEMO-001" "$(curl -s -b "$T/d1" -X DELETE -H "$J" -H "X-CSRF-Token: $CD" "$B/v1/employees/$DE" -d "{\"fecha_baja\":\"$HOY\",\"motivo_baja\":\"VOLUNTARIA\"}" | code)" "PH-DEMO-001"
+  check "demo: alta con email -> PH-DEMO-001" "$(curl -s -b "$T/d1" -H "$J" -H "X-CSRF-Token: $CD" "$B/v1/employees" -d '{"nombre":"Leo","email":"leo@ejemplo.es","puesto":"OTRO","tipo_contrato":"ETT","turno":"TARDE","fecha_alta":"2024-01-15"}' | code)" "PH-DEMO-001"
+  check "demo: sí ve el riesgo de su empresa" "$(curl -s -b "$T/d1" "$B/v1/risk?level=ALTO" | jq_ "5 <= d['meta']['total'] <= 8")" "True"
+  for i in 1 2 3 4 5; do curl -s -H "$J" -H "$P" "$B/v1/auth/login" -d '{"email":"gerente@pymehub.demo","password":"mala-contrasena"}' > /dev/null; done
+  check "5 fallos no bloquean la cuenta demo (DMO-025)" "$(curl -s -H "$J" -H "$P" "$B/v1/auth/login" -d "{\"email\":\"gerente@pymehub.demo\",\"password\":\"$DP\"}" | jq_ "d['data']['usuario']['perfil']")" "GERENTE"
+else
+  echo "  (sin PASSWORD_DEMO: se saltan las comprobaciones de inicio de sesión demo)"
+fi
 
 echo "== CORS"
 check "preflight origen permitido" "$(curl -s -i -X OPTIONS -H "Origin: $ORIGIN" -H 'Access-Control-Request-Method: POST' "$B/v1/auth/login" | grep -ic '^access-control-allow-origin')" "1"

@@ -7,6 +7,7 @@ use PymeHub\Core\ApiException;
 use PymeHub\Core\Audit;
 use PymeHub\Core\Context;
 use PymeHub\Core\Db;
+use PymeHub\Core\Demo;
 use PymeHub\Core\Plan;
 use PymeHub\Core\RateLimiter;
 use PymeHub\Core\Request;
@@ -28,12 +29,22 @@ final class AuthController
             'email'    => 'required|email',
             'password' => 'required|string|max:200',
         ]);
-        $key = 'login:' . $in['email'] . '|' . $request->ip;
-        if (RateLimiter::exceeded($key, self::MAX_INTENTOS, self::VENTANA)) {
+        $u = UsuarioRepository::findByEmail($in['email']);
+        $demo = $u !== null && (int) $u['es_demo'] === 1;
+
+        // DMO-034: demostración desactivada
+        if ($demo && !Demo::habilitada()) {
+            throw new ApiException('PH-DEMO-002', 'La demostración no está disponible en este momento', 403);
+        }
+        // RF-006: bloqueo tras intentos fallidos. Las cuentas demo tienen la contraseña impresa:
+        // se bloquea por IP con un margen mayor, nunca la cuenta para todos (DMO-025).
+        [$key, $max] = $demo
+            ? ['login-demo:' . $request->ip, Demo::MAX_INTENTOS_IP]
+            : ['login:' . $in['email'] . '|' . $request->ip, self::MAX_INTENTOS];
+        if (RateLimiter::exceeded($key, $max, self::VENTANA)) {
             throw new ApiException('PH-AUTH-004', 'Demasiados intentos fallidos. Espera 15 minutos e inténtalo de nuevo.', 429);
         }
 
-        $u = UsuarioRepository::findByEmail($in['email']);
         $ok = $u !== null
             && $u['estado_acceso'] === 'ACTIVO'
             && $u['i_estado'] !== 'SUSPENDIDO'
@@ -52,13 +63,25 @@ final class AuthController
         if (password_needs_rehash($u['password_hash'], PASSWORD_ARGON2ID)) {
             Db::run('UPDATE usuario SET password_hash = ? WHERE id = ?', [password_hash($in['password'], PASSWORD_ARGON2ID), $u['id']]);
         }
-        RateLimiter::reset($key);
+        // Las cuentas demo son compartidas: un acierto no borra los fallos de otras personas de la misma IP
+        if (!$demo) {
+            RateLimiter::reset($key);
+        }
+        // Sesiones concurrentes: cada inicio de sesión crea una sesión propia (DMO-026)
         Session::login((int) $u['id'], (string) $u['perfil']);
         Db::run('UPDATE usuario SET ultimo_acceso_en = UTC_TIMESTAMP() WHERE id = ?', [$u['id']]);
 
         Context::$usuario = $u;
         Context::$interlocutor = ['id' => (int) $u['interlocutor_id']];
-        Audit::log('auth.login', 'usuario', (int) $u['id'], $request->ip);
+        if ($demo) {
+            // DMO-033: inicio de sesión demo con el perfil y sin IP. Las pruebas automáticas
+            // (cabecera X-PymeHub-Prueba) no cuentan en las métricas comerciales.
+            if ($request->header('x-pymehub-prueba') === null) {
+                Audit::log('LOGIN_DEMO', $u['perfil'], (int) $u['id']);
+            }
+        } else {
+            Audit::log('auth.login', 'usuario', (int) $u['id'], $request->ip);
+        }
 
         self::me($request);
     }
@@ -75,7 +98,7 @@ final class AuthController
     public static function me(Request $request): void
     {
         $u = Db::one(
-            "SELECT u.id, u.perfil, u.nombre, u.apellidos, u.email, u.privacidad_aceptada_en,
+            "SELECT u.id, u.perfil, u.es_demo, u.nombre, u.apellidos, u.email, u.privacidad_aceptada_en,
                     i.id AS i_id, i.tipo AS i_tipo, i.nombre AS i_nombre, i.estado AS i_estado
                FROM usuario u JOIN interlocutor i ON i.id = u.interlocutor_id
               WHERE u.id = ?",
@@ -100,6 +123,7 @@ final class AuthController
                 'estado' => $u['i_estado'],
             ],
             'plan'       => $s['plan'] ?? null,
+            'demo'       => (int) $u['es_demo'] === 1,
             'features'   => Plan::features($s['plan'] ?? null),
             'csrf_token' => Session::csrfToken(),
             'sesion'     => ['inactividad_max_seg' => Session::idleSeconds()],

@@ -110,6 +110,10 @@ final class AsesorService
         [$payload, $catalogo, $hash] = self::entrada($prefs, $perfil, $interlocutorId, $estados);
 
         $modo = $this->ai->mode();
+        // DMO-NF4: en la demostración comercial, primero la caché (rápido y sin gastar cuota)
+        if ($modo === 'live' && \PymeHub\Core\Demo::enSesion()) {
+            $modo = 'cache_first';
+        }
         $servido = 'REGLAS';
         $aviso = null;
         $salida = null;

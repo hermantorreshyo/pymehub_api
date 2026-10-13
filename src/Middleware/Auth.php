@@ -23,7 +23,7 @@ final class Auth
                 throw new ApiException('PH-AUTH-002', 'Tu sesión ha caducado. Vuelve a iniciar sesión.', 401);
             }
             $row = Db::one(
-                "SELECT u.id, u.interlocutor_id, u.perfil, u.nombre, u.apellidos, u.email, u.estado_acceso,
+                "SELECT u.id, u.interlocutor_id, u.perfil, u.es_demo, u.nombre, u.apellidos, u.email, u.estado_acceso,
                         u.privacidad_aceptada_en,
                         i.tipo AS i_tipo, i.nombre AS i_nombre, i.estado AS i_estado
                    FROM usuario u
@@ -34,6 +34,11 @@ final class Auth
             if ($row === null || $row['estado_acceso'] !== 'ACTIVO' || $row['i_estado'] === 'SUSPENDIDO') {
                 Session::destroy();
                 throw new ApiException('PH-AUTH-002', 'Tu sesión ha caducado. Vuelve a iniciar sesión.', 401);
+            }
+            // DMO-034: con la demostración desactivada, las sesiones demo abiertas también se cierran
+            if ((int) $row['es_demo'] === 1 && !\PymeHub\Core\Demo::habilitada()) {
+                Session::destroy();
+                throw new ApiException('PH-DEMO-002', 'La demostración no está disponible en este momento', 403);
             }
             Context::$usuario = $row;
             Context::$interlocutor = [
@@ -52,6 +57,20 @@ final class Auth
             // PH-TENANT-004: empresa dada de baja = solo lectura
             if ($row['i_estado'] === 'BAJA' && $request->method !== 'GET') {
                 throw new ApiException('PH-TENANT-004', 'La empresa está dada de baja: solo lectura', 403);
+            }
+        };
+    }
+
+    /**
+     * DMO-024: acciones no disponibles para los usuarios de la demostración comercial
+     * (cuentas e invitaciones, cambios de identidad, bajas, importaciones, exportaciones y supresiones).
+     * Va después de require(), que carga el usuario en Context.
+     */
+    public static function noDemo(): callable
+    {
+        return static function (Request $request): void {
+            if (\PymeHub\Core\Demo::enSesion()) {
+                throw new ApiException('PH-DEMO-001', 'Acción no disponible en la demostración', 403);
             }
         };
     }
