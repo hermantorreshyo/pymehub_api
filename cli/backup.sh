@@ -17,6 +17,9 @@ fi
 
 # Credenciales en un archivo temporal 600 (nunca en la línea de comandos); PHP lo escribe
 # directamente para admitir contraseñas con espacios o caracteres especiales.
+# Se usa --defaults-file (no --defaults-extra-file): así no se leen /etc/mysql/*.cnf ni el
+# ~/.my.cnf de www-data (/var/www/.my.cnf), que en un servidor compartido puede traer la
+# contraseña de otra aplicación y provocar "Access denied … (using password: YES)".
 CNF="$(mktemp)"; chmod 600 "$CNF"
 trap 'rm -f "$CNF"' EXIT
 NAME="$(php -r '
@@ -29,7 +32,7 @@ NAME="$(php -r '
   file_put_contents($argv[2], implode("\n", $lines) . "\n");
   echo $d["name"];' "$ROOT/config/config.php" "$CNF")"
 
-"$DUMP" --defaults-extra-file="$CNF" --single-transaction --routines --no-tablespaces "$NAME" | gzip -9 > "$DEST/db-$STAMP.sql.gz"
+"$DUMP" --defaults-file="$CNF" --single-transaction --routines --no-tablespaces "$NAME" | gzip -9 > "$DEST/db-$STAMP.sql.gz"
 tar -czf "$DEST/uploads-$STAMP.tar.gz" -C "$ROOT/storage" uploads
 chmod 600 "$DEST"/*-"$STAMP".*
 ls -1t "$DEST"/db-*.sql.gz | tail -n +15 | xargs -r rm -f

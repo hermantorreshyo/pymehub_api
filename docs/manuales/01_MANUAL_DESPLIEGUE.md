@@ -611,6 +611,7 @@ Simular el borrado de empresas sin borrar nada: `sudo -u www-data php $API/cli/t
 
 | Síntoma | Causa probable | Solución |
 |---|---|---|
+| `backup.sh`: `1045 Access denied for user 'pymehub_user'@'localhost' (using password: YES)` con la API funcionando | Versión < 0.8.1: otro archivo de opciones (`/var/www/.my.cnf`, `[client]` de `/etc/mysql`) sobrescribía la contraseña | Actualizar a 0.8.1 (`--defaults-file`). Para ver qué se lee: `sudo -u www-data mariadb-dump --print-defaults \| sed 's/password=[^ ]*/password=***/'` |
 | `/install` dice "Se ha detectado MariaDB 10.x … necesita MariaDB 11.4.5 o superior" | Versión del motor no admitida | Apartado 4 |
 | `/install` dice "No se pudo conectar … Access denied for user 'pymehub_user'@'127.0.0.1'" | El usuario está creado para `localhost` (o al revés) | Usa el servidor que corresponda (apartado 6, tabla del host) |
 | `/install` dice "no tiene la collation utf8mb4_0900_ai_ci ni una equivalente" | Motor sin las collations necesarias | Actualiza a MariaDB 11.8 o MySQL 8.4 |

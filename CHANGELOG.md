@@ -2,7 +2,15 @@
 
 Formato basado en *Keep a Changelog*; versiones SemVer.
 
-## [0.8.0] · 2026-10-17
+## [0.8.1] · 2026-10-17
+
+**Corrección de la copia de seguridad.** Sin migraciones ni cambios en `config.php`.
+
+### Operación
+- `cli/backup.sh` usa `--defaults-file` en lugar de `--defaults-extra-file` (`RNF-064`). En el VPS compartido, otro archivo de opciones, como `/var/www/.my.cnf` de `www-data` o un `[client]` de `/etc/mysql`, sobrescribía la contraseña de `config.php`. El resultado era `1045 Access denied for user 'pymehub_user'@'localhost' (using password: YES)`. Reproducido y corregido en MariaDB 11.8.
+- Manual 01: el error y su causa, en «Problemas frecuentes».
+
+ · 2026-10-17
 
 **Operación (fase 9) y parámetros, textos legales e IVA (fase 9a).** **Migración nueva: `0008_parametros_legal`.** Sin cambios en `config.php`. Nueva tarea programada: `cli/tenant_purge.php` (04:30).
 
