@@ -113,7 +113,10 @@ final class ExportacionService
             ->add('modulos_propios.json', self::json($modulos))
             ->add('bienestar_semanal_por_equipo.csv', Zip::csv(self::bienestar($iid), ['semana', 'equipo', 'participantes', 'indice', 'animo', 'energia', 'estres']))
             ->add('alertas.csv', Zip::csv($alertas, ['id', 'tipo', 'entidad', 'entidad_id', 'severidad', 'mensaje', 'estado', 'gestionada_en', 'nota_gestion', 'creado_en']))
-            ->add('riesgo_rotacion_ultimo.csv', Zip::csv($riesgo, ['usuario_id', 'nombre', 'apellidos', 'fecha', 'puntuacion', 'nivel', 'factores', 'version_reglas']));
+            ->add('riesgo_rotacion_ultimo.csv', Zip::csv($riesgo, ['usuario_id', 'nombre', 'apellidos', 'fecha', 'puntuacion', 'nivel', 'factores', 'version_reglas']))
+            ->add('pagos.csv', Zip::csv(Db::all('SELECT id, origen, numero, estado, plan, ciclo_cobro, empleados, base, iva, total, moneda, periodo_inicio, periodo_fin, url_factura, creado_en
+                                                  FROM pago WHERE interlocutor_id = ? ORDER BY creado_en', [$iid]),
+                ['id', 'origen', 'numero', 'estado', 'plan', 'ciclo_cobro', 'empleados', 'base', 'iva', 'total', 'moneda', 'periodo_inicio', 'periodo_fin', 'url_factura', 'creado_en']));
         return $zip->build();
     }
 
@@ -157,7 +160,8 @@ final class ExportacionService
             . "- incidencias.csv: ausencias injustificadas, retrasos, siniestros, quejas y reconocimientos\n"
             . "- formacion.csv y modulos_propios.json: formación asignada y módulos creados por la empresa\n"
             . "- bienestar_semanal_por_equipo.csv: medias semanales de equipos con 5 personas o más\n"
-            . "- alertas.csv y riesgo_rotacion_ultimo.csv: alertas y última puntuación de riesgo de cada persona\n\n"
+            . "- alertas.csv y riesgo_rotacion_ultimo.csv: alertas y última puntuación de riesgo de cada persona\n"
+            . "- pagos.csv: facturas y pagos de la suscripción (base, IVA y total)\n\n"
             . "No se incluyen respuestas individuales ni notas del check-in de bienestar: son anónimas para la\n"
             . "empresa y cada persona puede descargar las suyas desde su cuenta.\n";
     }

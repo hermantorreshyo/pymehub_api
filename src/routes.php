@@ -14,6 +14,7 @@ use PymeHub\Controllers\V1\HealthController as Health;
 use PymeHub\Controllers\V1\IncidenciaController as Incidencias;
 use PymeHub\Controllers\V1\MiFormacionController as MiFormacion;
 use PymeHub\Controllers\V1\OperacionController as Operacion;
+use PymeHub\Controllers\V1\PagoController as Pagos;
 use PymeHub\Controllers\V1\ParametrosController as Parametros;
 use PymeHub\Controllers\V1\PublicoController as Publico;
 use PymeHub\Controllers\V1\RiesgoController as Riesgo;
@@ -47,6 +48,9 @@ return static function (Router $r): void {
     $r->add('GET',  '/v1/public/status', [Operacion::class, 'status']);
     $r->add('GET',  '/v1/public/params', [Parametros::class, 'publicos']);
 
+    // Stripe (modo prueba, fase 9c): sin sesión ni CSRF; la firma Stripe-Signature es obligatoria
+    $r->add('POST', '/v1/stripe/webhook', [Pagos::class, 'webhook']);
+
     // Autenticación
     $r->add('POST', '/v1/auth/login', [AuthC::class, 'login']);
     $r->add('POST', '/v1/auth/invitations/accept', [AuthC::class, 'acceptInvitation']);
@@ -68,9 +72,18 @@ return static function (Router $r): void {
     $r->add('GET',   '/v1/admin/errors', [Operacion::class, 'errors'], [$admin]);
     $r->add('GET',   '/v1/admin/params', [Parametros::class, 'index'], [$admin]);
     $r->add('PUT',   '/v1/admin/params', [Parametros::class, 'update'], [$admin, $csrf]);
+    // Vigencia y pagos (fases 9b y 9c)
+    $r->add('GET',   '/v1/admin/payments', [Pagos::class, 'adminPayments'], [$admin]);
+    $r->add('PUT',   '/v1/admin/tenants/{id}/validity', [Pagos::class, 'adminValidity'], [$admin, $csrf]);
 
     // Portabilidad y derechos RGPD (LEG-017, §8.8)
     $r->add('GET',  '/v1/company/export', [Operacion::class, 'exportCompany'], [$gerente, $noDemo]);
+
+    // Suscripción y pagos de la empresa (fases 9b y 9c): disponibles también con la suscripción vencida
+    $r->add('GET',  '/v1/billing/subscription', [Pagos::class, 'subscription'], [$gerente]);
+    $r->add('GET',  '/v1/billing/invoices', [Pagos::class, 'invoices'], [$gerente]);
+    $r->add('POST', '/v1/billing/checkout', [Pagos::class, 'checkout'], [$gerente, $noDemo, $csrf]);
+    $r->add('POST', '/v1/billing/portal', [Pagos::class, 'portal'], [$gerente, $noDemo, $csrf]);
     $r->add('GET',  '/v1/me/data-export', [Operacion::class, 'myData'], [$logged, $noDemo]);
     $r->add('POST', '/v1/employees/{id}/erase', [Operacion::class, 'erase'], [$gerente, $noDemo, $csrf]);
 

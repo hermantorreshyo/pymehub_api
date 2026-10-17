@@ -48,7 +48,8 @@ final class Auth
                 'estado' => $row['i_estado'],
             ];
             Context::$suscripcion = $row['i_tipo'] === 'EMPRESA'
-                ? Db::one("SELECT plan, ciclo_cobro, limite_empleados, cuota_ia_diaria FROM suscripcion WHERE interlocutor_id = ? AND estado = 'VIGENTE'", [(int) $row['interlocutor_id']])
+                ? Db::one("SELECT plan, ciclo_cobro, limite_empleados, cuota_ia_diaria, vigencia, periodo_fin, cancelar_al_final, stripe_subscription_id
+                              FROM suscripcion WHERE interlocutor_id = ? AND estado = 'VIGENTE'", [(int) $row['interlocutor_id']])
                 : null;
 
             if ($perfiles !== [] && !in_array($row['perfil'], $perfiles, true)) {
@@ -57,6 +58,12 @@ final class Auth
             // PH-TENANT-004: empresa dada de baja = solo lectura
             if ($row['i_estado'] === 'BAJA' && $request->method !== 'GET') {
                 throw new ApiException('PH-TENANT-004', 'La empresa está dada de baja: solo lectura', 403);
+            }
+            // PH-PLAN-002 (fase 9b): suscripción vencida tras la gracia = solo lectura, salvo renovar
+            if (Context::$suscripcion !== null
+                && \PymeHub\Core\Vigencia::calcular(Context::$suscripcion['periodo_fin'], (string) Context::$suscripcion['vigencia']) === 'VENCIDA'
+                && !\PymeHub\Core\Vigencia::rutaPermitida($request->method, $request->path)) {
+                throw new ApiException('PH-PLAN-002', 'La suscripción ha vencido: Pyme Hub queda en solo lectura hasta renovarla', 403);
             }
         };
     }

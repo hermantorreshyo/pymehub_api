@@ -2,6 +2,63 @@
 
 Formato basado en *Keep a Changelog*; versiones SemVer.
 
+## [0.9.0] · 2026-10-17
+
+**Vigencia de suscripciones (fase 9b) y pagos con Stripe en modo prueba (fase 9c).**
+- **Migración nueva:** `0009_vigencia_pagos`.
+- **`config.php`:** bloque `stripe` opcional; se rellena con `cli/stripe_setup.php`.
+- **Tarea programada nueva:** `cli/subscription_status.php`, a las 00:15.
+
+### Base de datos
+- `0009_vigencia_pagos`:
+  - en `suscripcion`: `vigencia` (`PRUEBA`, `VIGENTE`, `GRACIA`, `VENCIDA`), `periodo_fin`, `empleados_facturados`, `stripe_subscription_id`, `stripe_item_id` y `cancelar_al_final`;
+  - en `interlocutor`: `stripe_customer_id` y la aceptación de los términos;
+  - tablas `pago` y `evento_stripe`.
+- Las empresas existentes quedan vigentes sin vencimiento.
+- Probada en MariaDB 11.8.3 y MySQL.
+
+### Núcleo
+- `Core/Vigencia` (`RF-114`): estado efectivo por fechas en hora de España, con los días de prueba y de gracia parametrizados.
+- `Auth::require` aplica `PH-PLAN-002` con la suscripción vencida (`RF-115`): consultar, exportar, renovar y cerrar sesión siguen disponibles. `GET /v1/auth/me` incluye `vigencia`.
+- `Core/Stripe`: cliente sin SDK y verificación de la firma de los webhooks. Solo admite claves `sk_test_`.
+- `SuscripcionService`:
+  - los cambios de plan heredan la vigencia y el enlace con Stripe;
+  - la plataforma puede fijar la vigencia;
+  - la tarea diaria guarda los cambios y los audita.
+- `PagoService`:
+  - Checkout por empleado activo con IVA exclusivo y descuento anual (`RF-117`);
+  - portal del cliente;
+  - webhooks idempotentes (`RF-118`);
+  - sincronización diaria de la cantidad (`RF-119`).
+- Las empresas nuevas empiezan en prueba gratuita; `sin_prueba` deja el acuerdo sin vencimiento.
+- Validador: nueva regla `numeric`.
+- La exportación de la empresa incluye `pagos.csv`.
+
+### Endpoints
+- `GET /v1/billing/subscription` y `GET /v1/billing/invoices`.
+- `POST /v1/billing/checkout` y `POST /v1/billing/portal`.
+- `POST /v1/stripe/webhook`.
+- `GET /v1/admin/payments` y `PUT /v1/admin/tenants/{id}/validity` (`RF-116`, `RF-120`).
+- Errores nuevos: `PH-PLAN-002` y `PH-PAY-001` a `PH-PAY-005`.
+
+### Demo
+- Castilla: vigente con tres mensualidades ficticias.
+- Tajo: en prueba con 12 días por delante.
+- Contratar no está disponible en la demo (`PH-DEMO-001`).
+
+### Operación
+- `cli/subscription_status.php` (diaria).
+- `cli/stripe_setup.php`: escribe las claves de prueba en `config.php` sin mostrarlas, con copia del archivo anterior.
+- `tests/stripe_mock.php`: simulador local de Stripe para la prueba de humo.
+
+### Pruebas y documentación
+- Prueba de humo, sin fallos en ninguno de los dos motores:
+  - MariaDB 11.8.3 con el simulador de Stripe: 242 comprobaciones;
+  - MySQL: 242 con el simulador y 230 sin Stripe.
+- OpenAPI 0.9.0, Postman (carpeta 19).
+- Requisitos v0.9.8 (`RF-114` a `RF-120`, §16, §17.2, §17.6) y `MODELO_DATOS`.
+- Manual nuevo **03 · Pagos con Stripe en modo prueba**; manuales 01 y 02 actualizados.
+
 ## [0.8.2] · 2026-10-17
 
 **Prueba de restauración con root protegido por contraseña.** Sin migraciones ni cambios en `config.php`.

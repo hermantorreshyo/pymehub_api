@@ -2,7 +2,7 @@
 
 **Proyecto:** Pyme Hub — TFM EUDE Business School (The Best Team)
 **Documento:** Especificación de requerimientos técnicos del Producto Mínimo Viable (MVP)
-**Versión:** 0.9.7 · 17/10/2026
+**Versión:** 0.9.8 · 17/10/2026
 **Stack:** LAMP nativo, sin Docker (Linux · Apache · **MariaDB 11.8 LTS o MySQL 8.4 LTS** · PHP 8.4). Producción: MariaDB 11.8
 **Repositorios:** dos, independientes: `pymehub_api` (backend tipo API) y `pymehub_web` (frontend que consume la API)
 **Estado:** Alineado con la versión 4 del documento del TFM (carpeta *Revisión 004*). Los cambios que este documento obliga a trasladar al TFM se listan en §22.3.
@@ -27,6 +27,7 @@
 | 0.9.5 | 13/10/2026 | Demo comercial y QR del folleto (`docs/requerimientos/REQ_QR_DEMO_COMERCIAL.md`, `DMO-*`): §18.1 con la ruta `/demo`, usuarios demo con restricciones, reinicio nocturno y métricas; `PH-DEMO-001` y `PH-DEMO-002` en §16 |
 | 0.9.6 | 17/10/2026 | QR de instalación de la app: ruta estable `/app` → página `#/instalar` (§13.7, §18.1) |
 | 0.9.7 | 17/10/2026 | Fases 9 y 9a (v0.8.0): implementación de `RF-110`, `RF-111`, `RNF-062`, `RNF-063`, `RNF-064` y `LEG-007`/`LEG-017` (§17.5); nuevos `LEG-018` a `LEG-022` (textos legales, titular parametrizado, IVA y precios, contrato de encargo, versión aceptada) y `RF-112`/`RF-113` (parámetros de la plataforma, derecho de acceso del propio usuario) en §15 y §17.4 |
+| 0.9.8 | 17/10/2026 | Fases 9b y 9c (v0.9.0): vigencia de la suscripción (`RF-114` a `RF-116`) y pagos con Stripe en modo prueba (`RF-117` a `RF-120`); `PH-PLAN-002` y `PH-PAY-001` a `PH-PAY-005` en §16; tarea `cli/subscription_status.php` en §17.2; implementación en §17.6 |
 
 ---
 
@@ -878,6 +879,12 @@ Coincidencia visual general con el mockup; funciona en escritorio, tableta y mó
 | `PH-AUTH-005` | 410 | Invitación caducada o usada |
 | `PH-PERM-001` | 403 | El rol no permite la acción |
 | `PH-PLAN-001` | 403 | Funcionalidad no incluida en el plan contratado |
+| `PH-PLAN-002` | 403 | Suscripción vencida tras el periodo de gracia: solo lectura hasta renovarla (`RF-115`) |
+| `PH-PAY-001` | 503 | Pago online no disponible (Stripe sin configurar o con clave que no es de prueba) |
+| `PH-PAY-002` | 502 | Error al conectar con la pasarela de pago |
+| `PH-PAY-003` | 409 | La empresa ya tiene el pago online activo |
+| `PH-PAY-004` | 409 | La empresa todavía no tiene cliente en la pasarela |
+| `PH-PAY-005` | 400 | Webhook con firma no válida |
 | `PH-TENANT-001` | 404 | Recurso inexistente o de otra empresa |
 | `PH-TENANT-002` | 409 | Límite de empleados del plan alcanzado |
 | `PH-TENANT-003` | 403 | Falta el contrato de encargado del tratamiento de la empresa |
@@ -925,6 +932,7 @@ Coincidencia visual general con el mockup; funciona en escritorio, tableta y mó
 | `cli/ai_warmup.php` (pregenera las respuestas de los perfiles de §12.6) | Manual, antes de la defensa |
 | `cli/bias_report.php` (`LEG-015`) | Trimestral (día 1 de enero, abril, julio y octubre, 04:30) |
 | `cli/tenant_purge.php` (borrado de empresas con baja de más de 30 días, `LEG-017`) | Diaria, 04:30 |
+| `cli/subscription_status.php` (vigencia de las suscripciones y cantidad de empleados en Stripe, `RF-116`, `RF-119`) | Diaria, 00:15 |
 
 ### 17.3 Registro
 
@@ -943,6 +951,13 @@ Coincidencia visual general con el mockup; funciona en escritorio, tableta y mó
 | `RF-110` | M | **Exportación completa de una empresa**: archivo ZIP con CSV/JSON de empleados, equipos, incidencias, formación y agregados de bienestar (sin notas cifradas), generado por el administrador al solicitar la baja |
 | `RF-111` | M | **Baja de una empresa**: estado `baja`, acceso de solo lectura para gerente y RR. HH. hasta el borrado definitivo (`LEG-017`) |
 | `RF-112` | M | **Parámetros de la plataforma** (tabla `parametro`), editables por el administrador sin desplegar: titular, precios sin IVA, IVA, descuento del pago anual (0 % hasta que se acuerde), días de prueba y de gracia, días hasta el borrado tras la baja, comisión y exención de IVA de Skills y versión de los textos legales. Validados por tipo y límites; cambios auditados |
+| `RF-114` | M | **Vigencia de la suscripción**: `PRUEBA` (los primeros `suscripcion.dias_prueba` días de una empresa nueva), `VIGENTE` (pagada hasta `periodo_fin`, o sin vencimiento), `GRACIA` (`suscripcion.dias_gracia` días tras `periodo_fin`, con aviso) y `VENCIDA`. Se calcula en cada petición a partir de las fechas |
+| `RF-115` | M | **Suscripción vencida = solo lectura** (`PH-PLAN-002`): se puede consultar, exportar, renovar y cerrar sesión. La web avisa a la gerencia en prueba (7 últimos días), en gracia y vencida, y a toda la empresa cuando vence |
+| `RF-116` | M | **Gestión por la plataforma**: ampliar la vigencia, fijar una fecha o dejarla sin vencimiento, con un pago manual opcional (transferencia) registrado con su IVA. Tarea diaria que guarda la vigencia y audita cada cambio |
+| `RF-117` | M | **Pago online con Stripe en modo prueba**: Checkout de suscripción por empleado activo, precio sin IVA y tax rate exclusivo del IVA parametrizado, mensual o anual con el descuento parametrizado; resumen del pedido con base, IVA y total antes de pagar (`LEG-020`); aceptación de los términos registrada con su versión. Con claves de modo real el pago online queda desactivado |
+| `RF-118` | M | **Webhooks firmados e idempotentes** (`Stripe-Signature`, tolerancia de 5 minutos, `evento_stripe`): el cobro amplía la vigencia hasta el fin del periodo pagado y activa la empresa; el impago queda registrado; la cancelación deja de renovar sin cortar el periodo pagado |
+| `RF-119` | S | **Cantidad facturada**: sincronización diaria de los empleados activos con la suscripción de Stripe, sin prorrateo (se cobra en la siguiente renovación) |
+| `RF-120` | M | **Facturas y pagos**: la gerencia ve sus pagos (base, IVA, total, periodo y factura de Stripe) y abre el portal del cliente; la plataforma ve todos los pagos y el total cobrado. Los pagos se incluyen en la exportación de la empresa (`RF-110`) |
 | `RF-113` | M | **Derecho de acceso y portabilidad del propio usuario**: «Descargar mis datos» (`GET /v1/me/data-export`), con la nota del check-in descifrada; no disponible en la demo |
 
 ---
@@ -956,6 +971,22 @@ Coincidencia visual general con el mockup; funciona en escritorio, tableta y mó
 - **Errores** (`RNF-062`): los 5xx se registran con código, método y ruta; `GET /v1/admin/errors` los agrupa sin datos personales.
 - **Restauración** (`RNF-064`): `cli/restore_test.sh` restaura la última copia en una base temporal, compara filas por tabla y deja un informe.
 - **Demo**: exportar, descargar datos y suprimir devuelven `PH-DEMO-001`.
+
+### 17.6 Implementación de la vigencia y los pagos (v0.9.0)
+
+- **Datos** (migración `0009_vigencia_pagos`):
+  - `suscripcion.vigencia`, `periodo_fin`, `empleados_facturados`, `stripe_subscription_id`, `stripe_item_id`, `cancelar_al_final`; la fila nueva de un cambio de plan hereda todos;
+  - `interlocutor.stripe_customer_id` y la aceptación de los términos (`terminos_version`, `terminos_aceptados_en`, `terminos_aceptados_por`);
+  - tablas `pago` y `evento_stripe`.
+- **Vigencia** (`Core/Vigencia`): estado efectivo por fechas en hora de España. `Auth::require` aplica `PH-PLAN-002`. `GET /v1/auth/me` incluye `vigencia` para los avisos de la web.
+- **Stripe** (`Core/Stripe`, sin SDK):
+  - llamadas con `Stripe-Version` fija;
+  - verificación de firma HMAC-SHA256 en tiempo constante;
+  - solo con claves `sk_test_`.
+- **Webhooks** (`PagoService`): se leen de forma defensiva, porque los campos cambian entre versiones de la API (p. ej. `invoice.subscription` → `invoice.parent.subscription_details.subscription`). Si el proceso falla, se olvida el evento para que Stripe lo reintente.
+- **Portal del cliente**: se configura en el panel de Stripe con tarjeta, facturas y cancelación al final del periodo. Los cambios de plan los gestiona la plataforma.
+- **Pruebas**: `tests/stripe_mock.php` simula la API de Stripe para la prueba de humo en local (variables `SMOKE_STRIPE_WHSEC` y `SMOKE_STRIPE_MOCK`). La prueba real en el servidor se hace con las claves de prueba y la tarjeta 4242 4242 4242 4242.
+- **Configuración**: `cli/stripe_setup.php` escribe las claves en `config.php` sin mostrarlas en pantalla.
 
 ## 18. Datos de demostración
 

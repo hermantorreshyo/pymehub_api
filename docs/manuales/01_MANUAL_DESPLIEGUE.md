@@ -465,7 +465,7 @@ curl -s https://api.pymehub.hermantorres.com/install -o /dev/null -w "%{http_cod
 curl -s https://api.pymehub.hermantorres.com/config/config.php -o /dev/null -w "%{http_code}\n"   # 404
 ```
 
-**Prueba de humo.** `tests/smoke_test.sh` hace 211 comprobaciones (sesión, CSRF, perfiles, aislamiento entre empresas, organización, bienestar, formación, asesor de IA, riesgo de rotación y línea base, exportación y derechos RGPD, baja de empresa, mantenimiento, parámetros e IVA, demo comercial, CORS, bloqueo por fuerza bruta). Activa el mantenimiento unos segundos y cambia el descuento anual a 10 % y lo devuelve a 0 %. Con la contraseña de la demo como quinto argumento comprueba también el login demo, las sesiones concurrentes, `PH-DEMO-001` y el bloqueo por IP; el sexto es la URL de la web para la redirección `/demo`. Si no puede iniciar sesión como administrador se detiene y lo dice, en lugar de dar decenas de fallos. **Crea dos empresas y varios usuarios de prueba**, así que ejecútala en un entorno de pruebas, o en producción solo antes de cargar datos reales y borrando después lo creado:
+**Prueba de humo.** `tests/smoke_test.sh` hace 230 comprobaciones (242 con el simulador de Stripe) (sesión, CSRF, perfiles, aislamiento entre empresas, organización, bienestar, formación, asesor de IA, riesgo de rotación y línea base, exportación y derechos RGPD, baja de empresa, mantenimiento, parámetros e IVA, demo comercial, CORS, bloqueo por fuerza bruta). Activa el mantenimiento unos segundos y cambia el descuento anual a 10 % y lo devuelve a 0 %. Con la contraseña de la demo como quinto argumento comprueba también el login demo, las sesiones concurrentes, `PH-DEMO-001` y el bloqueo por IP; el sexto es la URL de la web para la redirección `/demo`. Si no puede iniciar sesión como administrador se detiene y lo dice, en lugar de dar decenas de fallos. **Crea dos empresas y varios usuarios de prueba**, así que ejecútala en un entorno de pruebas, o en producción solo antes de cargar datos reales y borrando después lo creado:
 
 ```bash
 cd /var/www/hermantorres/eude/pymehub/pymehub_api
@@ -505,6 +505,8 @@ API=/var/www/hermantorres/eude/pymehub/pymehub_api
 0 3 * * *  www-data  php $API/cli/recalc_risk.php >> $API/storage/logs/cron.log 2>&1
 # Reinicio de la demo comercial (REQ_QR_DEMO_COMERCIAL, DMO-027): solo empresas es_demo = 1
 30 3 * * *  www-data  php $API/cli/demo_seed.php --reset >> $API/storage/logs/demo_seed.log 2>&1
+# Vigencia de las suscripciones y empleados facturados en Stripe (RF-116, RF-119)
+15 0 * * *  www-data  php $API/cli/subscription_status.php >> $API/storage/logs/cron.log 2>&1
 # Borrado definitivo de las empresas dadas de baja hace más de 30 días (LEG-017, RF-111)
 30 4 * * *  www-data  php $API/cli/tenant_purge.php >> $API/storage/logs/cron.log 2>&1
 # Revisión de sesgos del motor de riesgo, cada trimestre (LEG-015)
@@ -598,6 +600,10 @@ cd /var/www/hermantorres/eude/pymehub/pymehub_api && sudo -u pymehub git checkou
 | Exportar todos los datos de una empresa (ZIP) | Empresas → Exportar | RF-110 |
 | Dar de baja una empresa: solo lectura y borrado a los 30 días (`cli/tenant_purge.php`, 04:30) | Empresas → Dar de baja | RF-111, LEG-017 |
 | Datos del titular, precios sin IVA, IVA, descuento anual, prueba, gracia, comisión de Skills y versión legal | Parámetros | Fase 9a |
+| Vigencia de una empresa: ampliar, fijar fecha o sin vencimiento, con pago manual (IVA incluido) | Empresas → Vigencia | RF-116 |
+| Pagos de todas las empresas y total cobrado | Pagos | RF-120 |
+
+**Pagos con Stripe en modo prueba (v0.9.0):** claves, webhook, portal del cliente y prueba de extremo a extremo en el [manual 03](03_STRIPE_MODO_PRUEBA.md). Sin configurar Stripe todo funciona, salvo el pago online (`PH-PAY-001`); la vigencia se gestiona a mano.
 
 **Datos del titular.** La sociedad aún no está constituida: los textos legales (`#/legal/aviso`, `privacidad`, `terminos`, `cookies`, `skills`) muestran «Sociedad en constitución» y el correo de contacto. Cuando se constituya, rellena en **Parámetros** la razón social, el NIF, el domicilio y los datos registrales, marca «La sociedad está constituida» y cambia la **versión de los textos legales** (las cuentas nuevas guardan la versión aceptada en `usuario.privacidad_version`). Antes de comercializar, los textos y la plantilla de contrato de encargo (`docs/legal/`) deben revisarse jurídicamente.
 
@@ -645,7 +651,7 @@ Simular el borrado de empresas sin borrar nada: `sudo -u www-data php $API/cli/t
 - [ ] HTTPS en ambos subdominios, con redirección desde HTTP.
 - [ ] Asistente completado, `/install` devuelve 404, `config.php` con permisos 640 y copia fuera del servidor.
 - [ ] `/v1/health` en `ok`.
-- [ ] Prueba de humo con 211 correctas (`tests/smoke_test.sh`, con la contraseña de la demo).
+- [ ] Prueba de humo con 230 correctas (`tests/smoke_test.sh`, con la contraseña de la demo).
 - [ ] La web responde 200 en `/` y en `js/config.js`, sin errores en la consola.
 - [ ] `/etc/cron.d/pymehub` activo, primera copia hecha (`copia_seguridad: ok`) y restauración probada.
 - [ ] Catálogo de formación con 15 módulos (`php cli/catalog_sync.php`).

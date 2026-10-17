@@ -118,7 +118,8 @@ final class DemoService
             $this->admin();
 
             // --- Reparto Rápido Castilla S.L. (plan Completo) ---
-            $castilla = $this->empresa('Reparto Rápido Castilla S.L.', 'Reparto Rápido', self::NIF_CASTILLA, 'COMPLETO', 'MENSUAL', 60);
+            $castilla = $this->empresa('Reparto Rápido Castilla S.L.', 'Reparto Rápido', self::NIF_CASTILLA, 'COMPLETO', 'MENSUAL', 60, 'VIGENTE', Tiempo::dia(20));
+            $this->pagosDemo($castilla, 'COMPLETO', 48);
             $this->acceso($castilla, 'GERENTE', 'Ana', 'García Morales', 'gerente@' . self::DOMINIO);
             $rrhh = $this->acceso($castilla, 'RRHH', 'Lucía', 'Prieto Sanz', 'rrhh@' . self::DOMINIO);
             $equiposC = [
@@ -135,7 +136,7 @@ final class DemoService
             $resumen['castilla'] = ['id' => $castilla, 'empleados' => count($plantillaC['empleados'])];
 
             // --- Mensajería Tajo S.L. (plan Entrada) ---
-            $tajo = $this->empresa('Mensajería Tajo S.L.', 'Mensajería Tajo', self::NIF_TAJO, 'ENTRADA', 'ANUAL', 25);
+            $tajo = $this->empresa('Mensajería Tajo S.L.', 'Mensajería Tajo', self::NIF_TAJO, 'ENTRADA', 'ANUAL', 25, 'PRUEBA', Tiempo::dia(12));
             $gerenteTajo = $this->acceso($tajo, 'GERENTE', 'Pedro', 'Navarro Gil', 'gerente2@' . self::DOMINIO);
             $equiposT = [
                 'Reparto' => ['zona' => 'Toledo y Talavera', 'n' => 8, 'puestos' => ['REPARTIDOR', 'CONDUCTOR'], 'turnos' => ['MANANA', 'TARDE']],
@@ -194,7 +195,8 @@ final class DemoService
         );
     }
 
-    private function empresa(string $nombre, string $comercial, string $nif, string $plan, string $ciclo, int $limite): int
+    /** Vigencia (fase 9b): Castilla pagada hasta dentro de 20 días; Tajo en prueba con 12 días por delante. */
+    private function empresa(string $nombre, string $comercial, string $nif, string $plan, string $ciclo, int $limite, string $vigencia = 'VIGENTE', ?string $periodoFin = null): int
     {
         $id = Db::insert(
             "INSERT INTO interlocutor (tipo, nombre, nombre_comercial, nif, sector, email_contacto, fecha_contrato_encargado, estado, es_demo)
@@ -202,11 +204,27 @@ final class DemoService
             [$nombre, $comercial, $nif, 'contacto@' . self::DOMINIO, Tiempo::dia(-120)]
         );
         Db::insert(
-            'INSERT INTO suscripcion (interlocutor_id, plan, ciclo_cobro, precio_empleado_mes, limite_empleados, fecha_inicio)
-             VALUES (?, ?, ?, ?, ?, ?)',
-            [$id, $plan, $ciclo, \PymeHub\Core\Parametros::precioMes($plan), $limite, Tiempo::dia(-120)]
+            'INSERT INTO suscripcion (interlocutor_id, plan, ciclo_cobro, precio_empleado_mes, limite_empleados, fecha_inicio, vigencia, periodo_fin)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [$id, $plan, $ciclo, \PymeHub\Core\Parametros::precioMes($plan), $limite, Tiempo::dia(-120), $vigencia, $periodoFin]
         );
         return $id;
+    }
+
+    /** Tres mensualidades ficticias para ver el historial de facturas en la demo (base + IVA). */
+    private function pagosDemo(int $empresa, string $plan, int $empleados): void
+    {
+        $base = round(\PymeHub\Core\Parametros::precioMes($plan) * $empleados, 2);
+        $iva = round($base * \PymeHub\Core\Parametros::iva() / 100, 2);
+        foreach ([3, 2, 1] as $m) {
+            $ini = Tiempo::dia(20 - 30 * $m + 1);
+            Db::insert(
+                "INSERT INTO pago (interlocutor_id, origen, numero, estado, plan, ciclo_cobro, empleados, base, iva, total, periodo_inicio, periodo_fin, nota, creado_en)
+                 VALUES (?, 'MANUAL', ?, 'PAGADO', ?, 'MENSUAL', ?, ?, ?, ?, ?, ?, 'Pago ficticio de la demostración', ?)",
+                [$empresa, 'DEMO-' . str_replace('-', '', substr($ini, 0, 7)), $plan, $empleados, $base, $iva, round($base + $iva, 2),
+                 $ini, Tiempo::sumarDias($ini, 29), $ini . ' 09:00:00']
+            );
+        }
     }
 
     private function acceso(int $empresa, string $perfil, string $nombre, string $apellidos, string $email): int

@@ -105,7 +105,7 @@ final class AuthController
             [Session::userId()]
         );
         $s = $u['i_tipo'] === 'EMPRESA'
-            ? Db::one("SELECT plan, ciclo_cobro FROM suscripcion WHERE interlocutor_id = ? AND estado = 'VIGENTE'", [$u['i_id']])
+            ? Db::one("SELECT plan, ciclo_cobro, vigencia, periodo_fin, cancelar_al_final, stripe_subscription_id FROM suscripcion WHERE interlocutor_id = ? AND estado = 'VIGENTE'", [$u['i_id']])
             : null;
 
         Response::json([
@@ -125,6 +125,8 @@ final class AuthController
                 'fecha_borrado' => $u['i_estado'] === 'BAJA' ? \PymeHub\Services\BorradoService::fechaBorrado($u['i_fecha_baja']) : null,
             ],
             'plan'       => $s['plan'] ?? null,
+            // Fase 9b: PRUEBA, VIGENTE, GRACIA o VENCIDA (solo lectura), para los avisos de la web
+            'vigencia'   => \PymeHub\Core\Vigencia::resumen($s),
             'demo'       => (int) $u['es_demo'] === 1,
             'features'   => Plan::features($s['plan'] ?? null),
             'csrf_token' => Session::csrfToken(),

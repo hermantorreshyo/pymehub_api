@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Prueba de humo de Pyme Hub API (fases 0-7 y demo comercial).
 # Uso: tests/smoke_test.sh <URL_API> <ORIGEN_FRONTEND> <EMAIL_ADMIN> <PASSWORD_ADMIN> [PASSWORD_DEMO] [URL_WEB]
+#   Variables opcionales para el flujo de pago (fase 9c) contra el simulador tests/stripe_mock.php:
+#     SMOKE_STRIPE_WHSEC=<stripe.webhook_secret de la API>  SMOKE_STRIPE_MOCK=http://127.0.0.1:12111
+#   Sin ellas solo se comprueba la vigencia y que la pasarela responde de forma controlada.
 #   PASSWORD_DEMO: contraseña de los usuarios demo (config demo.password). Sin ella se saltan las
 #                  comprobaciones de inicio de sesión demo.
 #   URL_WEB: dónde comprobar la redirección /demo (por defecto, ORIGEN_FRONTEND).
@@ -318,6 +321,57 @@ check "la gestión no cambia parámetros -> PH-PERM-001" "$(send h PUT "$CH" /v1
 check "parámetros sin CSRF -> PH-AUTH-003" "$(curl -s -b "$T/a" -X PUT -H "$J" "$B/v1/admin/params" -d '{"precios.iva_pct":21}' | code)" "PH-AUTH-003"
 check "/legal/privacidad en la web" "$(curl -s -o /dev/null -w '%{http_code}' "$WEB/js/views/public/legal.js")" "200"
 
+echo "== Vigencia de la suscripción (fase 9b)"
+check "empresa nueva en prueba gratuita" "$(curl -s -b "$T/t" "$B/v1/auth/me" | jq_ "d['data']['vigencia']['estado']+' '+str(d['data']['vigencia']['dias_restantes'] >= 28)")" "PRUEBA True"
+check "resumen de la suscripción con importes (base + IVA)" "$(curl -s -b "$T/t" "$B/v1/billing/subscription" | jq_ "d['data']['plan']+' '+str(d['data']['importes']['ANUAL']['iva_pct'])+' '+str(d['data']['importes']['MENSUAL']['total'] > d['data']['importes']['MENSUAL']['base'])")" "ENTRADA 21 True"
+check "RR. HH. no ve la facturación -> PH-PERM-001" "$(curl -s -b "$T/h" "$B/v1/billing/subscription" | code)" "PH-PERM-001"
+check "periodo vencido hace 3 días -> en gracia" "$(send a PUT "$CA" "/v1/admin/tenants/$EMP2/validity" "{\"accion\":\"FIJAR\",\"periodo_fin\":\"$(date -d '-3 days' +%F)\",\"vigencia\":\"VIGENTE\"}" | jq_ "d['data']['estado']+' '+str(d['data']['solo_lectura'])")" "GRACIA False"
+check "en gracia se puede seguir trabajando" "$(send t POST "$CT" /v1/teams "{\"nombre\":\"Gracia $R\"}" | jq_ "'ok' if 'data' in d else d['error']['code']")" "ok"
+send a PUT "$CA" "/v1/admin/tenants/$EMP2/validity" "{\"accion\":\"FIJAR\",\"periodo_fin\":\"$(date -d '-20 days' +%F)\",\"vigencia\":\"VIGENTE\"}" > /dev/null
+check "tras la gracia -> vencida y solo lectura" "$(curl -s -b "$T/t" "$B/v1/auth/me" | jq_ "d['data']['vigencia']['estado']+' '+str(d['data']['vigencia']['solo_lectura'])")" "VENCIDA True"
+check "vencida: escribir -> PH-PLAN-002" "$(send t POST "$CT" /v1/teams '{"nombre":"Bloqueado"}' | code)" "PH-PLAN-002"
+check "vencida: consultar y exportar siguen" "$(curl -s -b "$T/t" -o /dev/null -w '%{http_code}' "$B/v1/teams") $(curl -s -b "$T/t" -o /dev/null -w '%{http_code}' "$B/v1/company/export") $(curl -s -b "$T/t" -o /dev/null -w '%{http_code}' "$B/v1/billing/subscription")" "200 200 200"
+check "renovar 30 días con pago manual (base + IVA)" "$(send a PUT "$CA" "/v1/admin/tenants/$EMP2/validity" '{"accion":"AMPLIAR","dias":30,"pago_manual":{"base":100,"nota":"Transferencia de prueba"}}' | jq_ "d['data']['estado']+' '+str(d['data']['dias_restantes'] >= 29)")" "VIGENTE True"
+check "el pago manual aparece con el IVA desglosado" "$(curl -s -b "$T/t" "$B/v1/billing/invoices" | jq_ "' '.join(str(d['data'][0][k]) for k in ('origen','base','iva','total'))")" "MANUAL 100 21 121"
+check "la plataforma lista los pagos" "$(curl -s -b "$T/a" "$B/v1/admin/payments?tenant=$EMP2" | jq_ "str(d['meta']['total'] >= 1)+' '+str(d['meta']['cobrado'] >= 121)")" "True True"
+check "vigencia en el listado de empresas" "$(curl -s -b "$T/a" "$B/v1/admin/tenants/$EMP2" | jq_ "d['data']['vigencia']['estado']")" "VIGENTE"
+check "acción de vigencia no válida -> PH-VAL-001" "$(send a PUT "$CA" "/v1/admin/tenants/$EMP2/validity" '{"accion":"REGALAR"}' | code)" "PH-VAL-001"
+check "la gestión no cambia la vigencia -> PH-PERM-001" "$(send t PUT "$CT" "/v1/admin/tenants/$EMP2/validity" '{"accion":"SIN_VENCIMIENTO"}' | code)" "PH-PERM-001"
+
+echo "== Pagos con Stripe en modo prueba (fase 9c)"
+check "contratar sin aceptar los términos -> PH-VAL-001" "$(send t POST "$CT" /v1/billing/checkout '{"plan":"ENTRADA","ciclo":"MENSUAL","acepta_terminos":false}' | code)" "PH-VAL-001"
+check "webhook sin firma -> PH-PAY-005" "$(curl -s -H "$J" "$B/v1/stripe/webhook" -d '{"id":"evt_x","type":"invoice.paid","data":{"object":{}}}' | code)" "PH-PAY-005"
+if [ -n "${SMOKE_STRIPE_WHSEC:-}" ]; then
+  firmar(){ local ts; ts=$(date +%s); printf 't=%s,v1=%s' "$ts" "$(printf '%s.%s' "$ts" "$1" | openssl dgst -sha256 -hmac "$SMOKE_STRIPE_WHSEC" | awk '{print $NF}')"; }
+  webhook(){ curl -s -H "$J" -H "Stripe-Signature: $(firmar "$1")" "$B/v1/stripe/webhook" --data-binary "$1"; }
+  send t POST "$CT" /v1/billing/checkout '{"plan":"COMPLETO","ciclo":"ANUAL","acepta_terminos":true}' > "$T/co.json"
+  check "Checkout: URL de Stripe e importe con IVA" "$(jq_ "str(d['data']['url'].startswith('https://'))+' '+d['data']['importe']['ciclo']+' '+str(d['data']['importe']['iva_pct'])" < "$T/co.json")" "True ANUAL 21"
+  if [ -n "${SMOKE_STRIPE_MOCK:-}" ]; then
+    curl -s "$SMOKE_STRIPE_MOCK/__mock/state" > "$T/ms.json"
+    check "Checkout: precio sin IVA + tasa de IVA exclusiva, por empleado y año" "$(jq_ "' '.join(str(x) for x in (d['sesiones'][-1]['params']['line_items'][0]['price_data']['recurring']['interval'], d['sesiones'][-1]['params']['line_items'][0]['price_data']['unit_amount'], d['tasas'][d['sesiones'][-1]['params']['line_items'][0]['tax_rates'][0]]['percentage'], d['tasas'][d['sesiones'][-1]['params']['line_items'][0]['tax_rates'][0]]['inclusive'], d['sesiones'][-1]['params']['metadata']['plan']))" < "$T/ms.json")" "year 34800 21 False COMPLETO"
+    CUS=$(jq_ "d['sesiones'][-1]['params']['customer']" < "$T/ms.json"); SUB=$(jq_ "d['sesiones'][-1]['subscription_simulada']" < "$T/ms.json")
+    check "webhook con firma de otro secreto -> PH-PAY-005" "$(curl -s -H "$J" -H "Stripe-Signature: t=$(date +%s),v1=$(printf 'x' | openssl dgst -sha256 -hmac otro | awk '{print $NF}')" "$B/v1/stripe/webhook" -d '{"id":"evt_y"}' | code)" "PH-PAY-005"
+    EV1="{\"id\":\"evt_cs_$R\",\"type\":\"checkout.session.completed\",\"livemode\":false,\"data\":{\"object\":{\"id\":\"cs_x\",\"mode\":\"subscription\",\"customer\":\"$CUS\",\"subscription\":\"$SUB\",\"client_reference_id\":\"$EMP2\",\"metadata\":{\"plan\":\"COMPLETO\",\"ciclo\":\"ANUAL\"}}}}"
+    check "webhook checkout.session.completed firmado" "$(webhook "$EV1" | jq_ "d['data']['resultado']")" "ok"
+    check "el mismo evento otra vez -> duplicado (idempotencia)" "$(webhook "$EV1" | jq_ "d['data']['resultado']")" "duplicado"
+    check "tras el Checkout: plan Completo anual con pago online" "$(curl -s -b "$T/t" "$B/v1/billing/subscription" | jq_ "d['data']['plan']+' '+d['data']['ciclo_cobro']+' '+str(d['data']['pago_online']['suscripcion'])")" "COMPLETO ANUAL True"
+    P0=$(date -d '-1 day' +%s); P1=$(date -d '+364 days' +%s)
+    EV2="{\"id\":\"evt_inv_$R\",\"type\":\"invoice.paid\",\"livemode\":false,\"data\":{\"object\":{\"id\":\"in_$R\",\"customer\":\"$CUS\",\"number\":\"PH-$R\",\"billing_reason\":\"subscription_create\",\"currency\":\"eur\",\"subtotal\":34800,\"total_excluding_tax\":34800,\"total\":42108,\"hosted_invoice_url\":\"https://invoice.stripe.test/i/$R\",\"invoice_pdf\":\"https://invoice.stripe.test/i/$R/pdf\",\"parent\":{\"subscription_details\":{\"subscription\":\"$SUB\"}},\"lines\":{\"data\":[{\"quantity\":1,\"period\":{\"start\":$P0,\"end\":$P1}}]}}}}"
+    check "webhook invoice.paid -> pago con base, IVA y total" "$(webhook "$EV2" > /dev/null; curl -s -b "$T/t" "$B/v1/billing/invoices" | jq_ "' '.join(str(d['data'][0][k]) for k in ('origen','estado','base','iva','total'))")" "STRIPE PAGADO 348 73.08 421.08"
+    check "tras el cobro: vigente hasta el fin del periodo pagado" "$(curl -s -b "$T/t" "$B/v1/auth/me" | jq_ "d['data']['vigencia']['estado']+' '+d['data']['vigencia']['periodo_fin']")" "VIGENTE $(date -d '+364 days' +%F)"
+    check "con el pago online activo, otro Checkout -> PH-PAY-003" "$(send t POST "$CT" /v1/billing/checkout '{"plan":"ENTRADA","ciclo":"MENSUAL","acepta_terminos":true}' | code)" "PH-PAY-003"
+    check "portal del cliente de Stripe" "$(send t POST "$CT" /v1/billing/portal '{}' | jq_ "str(d['data']['url'].startswith('https://'))")" "True"
+    EV3="{\"id\":\"evt_fail_$R\",\"type\":\"invoice.payment_failed\",\"livemode\":false,\"data\":{\"object\":{\"id\":\"in_f$R\",\"customer\":\"$CUS\",\"currency\":\"eur\",\"subtotal\":34800,\"total\":42108,\"lines\":{\"data\":[{\"quantity\":1,\"period\":{\"start\":$P1,\"end\":$P1}}]}}}}"
+    check "webhook invoice.payment_failed -> pago fallido registrado" "$(webhook "$EV3" > /dev/null; curl -s -b "$T/a" "$B/v1/admin/payments?tenant=$EMP2" | jq_ "str(any(p['estado']=='FALLIDO' for p in d['data']))")" "True"
+    EV4="{\"id\":\"evt_del_$R\",\"type\":\"customer.subscription.deleted\",\"livemode\":false,\"data\":{\"object\":{\"id\":\"$SUB\",\"customer\":\"$CUS\"}}}"
+    check "webhook subscription.deleted: deja de renovarse, la vigencia sigue" "$(webhook "$EV4" > /dev/null; curl -s -b "$T/t" "$B/v1/billing/subscription" | jq_ "str(d['data']['pago_online']['suscripcion'])+' '+d['data']['vigencia']['estado']")" "False VIGENTE"
+    check "evento de modo real -> ignorado" "$(webhook "{\"id\":\"evt_live_$R\",\"type\":\"invoice.paid\",\"livemode\":true,\"data\":{\"object\":{}}}" | jq_ "d['data']['resultado']")" "ignorado_livemode"
+  fi
+else
+  # Sin Stripe: PH-PAY-001. Con las claves de prueba reales: una URL de Checkout (que nadie paga).
+  check "Checkout: pago online desactivado o URL de Stripe" "$(send t POST "$CT" /v1/billing/checkout '{"plan":"ENTRADA","ciclo":"MENSUAL","acepta_terminos":true}' | jq_ "'controlado' if d.get('error',{}).get('code') == 'PH-PAY-001' or str(d.get('data',{}).get('url','')).startswith('https://checkout.stripe.com') else json.dumps(d)[:120]")" "controlado"
+fi
+
 echo "== Demo comercial y QR del folleto (REQ_QR_DEMO_COMERCIAL)"
 RD=$(curl -s -o /dev/null -D - "$WEB/demo")
 check "/demo -> 302 a la landing en modo demo (DMO-001)" "$(printf '%s' "$RD" | head -1 | awk '{print $2}') $(printf '%s' "$RD" | grep -ic '^location:.*modo=demo')" "302 1"
@@ -343,6 +397,8 @@ if [ -n "$DP" ]; then
   check "demo: dar de baja a un empleado -> PH-DEMO-001" "$(curl -s -b "$T/d1" -X DELETE -H "$J" -H "X-CSRF-Token: $CD" "$B/v1/employees/$DE" -d "{\"fecha_baja\":\"$HOY\",\"motivo_baja\":\"VOLUNTARIA\"}" | code)" "PH-DEMO-001"
   check "demo: alta con email -> PH-DEMO-001" "$(curl -s -b "$T/d1" -H "$J" -H "X-CSRF-Token: $CD" "$B/v1/employees" -d '{"nombre":"Leo","email":"leo@ejemplo.es","puesto":"OTRO","tipo_contrato":"ETT","turno":"TARDE","fecha_alta":"2024-01-15"}' | code)" "PH-DEMO-001"
   check "demo: exportar la empresa -> PH-DEMO-001" "$(curl -s -b "$T/d1" "$B/v1/company/export" | code)" "PH-DEMO-001"
+  check "demo: contratar -> PH-DEMO-001" "$(curl -s -b "$T/d1" -H "$J" -H "X-CSRF-Token: $CD" "$B/v1/billing/checkout" -d '{"plan":"COMPLETO","ciclo":"MENSUAL","acepta_terminos":true}' | code)" "PH-DEMO-001"
+  check "demo: ve su vigencia y su historial de pagos" "$(curl -s -b "$T/d1" "$B/v1/billing/invoices" | jq_ "str(d['meta']['total'] >= 3)")" "True"
   check "demo: sí ve el riesgo de su empresa" "$(curl -s -b "$T/d1" "$B/v1/risk?level=ALTO" | jq_ "5 <= d['meta']['total'] <= 8")" "True"
   for i in 1 2 3 4 5; do curl -s -H "$J" -H "$P" "$B/v1/auth/login" -d '{"email":"gerente@pymehub.demo","password":"mala-contrasena"}' > /dev/null; done
   check "5 fallos no bloquean la cuenta demo (DMO-025)" "$(curl -s -H "$J" -H "$P" "$B/v1/auth/login" -d "{\"email\":\"gerente@pymehub.demo\",\"password\":\"$DP\"}" | jq_ "d['data']['usuario']['perfil']")" "GERENTE"

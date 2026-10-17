@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Pyme Hub API
-  version: 0.8.0
+  version: 0.9.0
   description: |
     Contrato entre pymehub_api y pymehub_web (DEC-13).
     Autenticación por cookie de sesión HttpOnly. Toda petición que modifica datos
@@ -9,6 +9,9 @@ info:
     Errores: { "error": { "code": "PH-…", "message", "details", "correlation_id" } }.
     Demo comercial (docs/requerimientos/REQ_QR_DEMO_COMERCIAL.md): PH-DEMO-001 (403) acción no disponible
     para usuarios demo; PH-DEMO-002 (403) demostración desactivada (config demo.habilitada).
+    Vigencia (fase 9b): PH-PLAN-002 (403) suscripción vencida tras la gracia, solo lectura (salvo /v1/billing/* y logout).
+    Pagos (fase 9c, Stripe solo en modo prueba): PH-PAY-001 (503) pago online no disponible; PH-PAY-002 (502) error de la
+    pasarela; PH-PAY-003 (409) ya hay pago online; PH-PAY-004 (409) sin cliente de Stripe; PH-PAY-005 (400) firma de webhook no válida.
     Listados paginados: ?page=&per_page= (máx. 100); meta = { total, page, per_page }.
 servers:
   - url: https://api.pymehub.hermantorres.com
@@ -79,6 +82,7 @@ components:
         limite_empleados: { type: integer, maximum: 250 }
         fecha_contrato_encargado: { type: string, format: date }
         estado: { type: string, enum: [PILOTO, ACTIVO] }
+        sin_prueba: { type: boolean, default: false, description: "true = VIGENTE sin vencimiento (acuerdo sin prueba gratuita)" }
         gerente:
           type: object
           required: [nombre, email]
@@ -548,6 +552,7 @@ paths:
       responses: { '200': { description: ok } }
     post:
       summary: Alta de empresa con suscripción y gerente invitado (perfil ADMIN)
+      description: 'Fase 9b: la empresa empieza en PRUEBA durante suscripcion.dias_prueba días, salvo sin_prueba: true (VIGENTE sin vencimiento).'
       security: [{ sesion: [], csrf: [] }]
       requestBody:
         content: { application/json: { schema: { $ref: '#/components/schemas/EmpresaAlta' } } }
@@ -1519,3 +1524,88 @@ paths:
       responses:
         '200': { description: Lista actualizada (como GET) }
         '422': { description: PH-VAL-001 con el error por clave en details }
+  /v1/billing/subscription:
+    get:
+      summary: Suscripción de mi empresa (GERENTE · fase 9b)
+      description: Disponible también con la suscripción vencida.
+      security: [{ sesion: [] }]
+      responses:
+        '200': { description: 'data = { plan, ciclo_cobro, vigencia: Vigencia, empleados_activos, empleados_facturados, importes: { MENSUAL: Importe, ANUAL: Importe } (por los empleados activos, mínimo 1), precios: { ENTRADA, COMPLETO }, pago_online: { disponible, modo: PRUEBA, cliente, suscripcion }, terminos: { version_vigente, version_aceptada, aceptados_en } }. Vigencia = { estado: PRUEBA|VIGENTE|GRACIA|VENCIDA, periodo_fin, gracia_hasta, dias_restantes, solo_lectura, cancelar_al_final, pago_online }. También en GET /v1/auth/me (vigencia).' }
+        '403': { description: PH-PERM-001 }
+  /v1/billing/invoices:
+    get:
+      summary: Facturas y pagos de mi empresa (GERENTE)
+      security: [{ sesion: [] }]
+      responses:
+        '200': { description: 'data[] = { id, origen: STRIPE|MANUAL, numero, estado: PAGADO|FALLIDO|PENDIENTE|ANULADO, plan, ciclo_cobro, empleados, base, iva, total, moneda, periodo_inicio, periodo_fin, url_factura, url_pdf, nota, creado_en }' }
+  /v1/billing/checkout:
+    post:
+      summary: Contratar o renovar con Stripe Checkout (GERENTE · fase 9c, modo prueba)
+      description: Registra la aceptación de los términos (versión legal vigente) y crea una sesión de Checkout de suscripción por empleado activo, precio sin IVA + tax rate exclusivo del IVA parametrizado, mensual o anual con el descuento anual. Si la empresa está en prueba con más de 48 h por delante, el primer cobro se hace al terminar la prueba. No disponible en la demo.
+      security: [{ sesion: [], csrf: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan, ciclo, acepta_terminos]
+              additionalProperties: false
+              properties:
+                plan: { type: string, enum: [ENTRADA, COMPLETO] }
+                ciclo: { type: string, enum: [MENSUAL, ANUAL] }
+                acepta_terminos: { type: boolean, const: true }
+      responses:
+        '201': { description: 'data = { url (redirigir), id, importe: Importe, cobro_al_terminar_prueba }' }
+        '403': { description: PH-DEMO-001 · PH-PERM-001 }
+        '409': { description: PH-PAY-003 }
+        '422': { description: PH-VAL-001 }
+        '502': { description: PH-PAY-002 }
+        '503': { description: PH-PAY-001 }
+  /v1/billing/portal:
+    post:
+      summary: Portal del cliente de Stripe (GERENTE)
+      description: Tarjeta, facturas y cancelación al final del periodo. El portal se configura en el panel de Stripe (modo prueba).
+      security: [{ sesion: [], csrf: [] }]
+      responses:
+        '201': { description: 'data = { url }' }
+        '409': { description: PH-PAY-004 }
+  /v1/stripe/webhook:
+    post:
+      summary: Webhook de Stripe (fase 9c)
+      description: 'Sin sesión ni CSRF; exige la cabecera Stripe-Signature (HMAC-SHA256 con stripe.webhook_secret, tolerancia 5 min). Idempotente por id de evento (evento_stripe). Eventos: checkout.session.completed (enlaza cliente y suscripción, aplica plan y ciclo), invoice.paid (pago PAGADO, vigencia VIGENTE hasta el fin del periodo, PILOTO → ACTIVO), invoice.payment_failed (pago FALLIDO), customer.subscription.created/updated (cantidad, cancelación, prueba), customer.subscription.deleted (deja de renovarse; la vigencia sigue hasta periodo_fin). Eventos livemode se ignoran. Si el proceso falla responde 5xx y Stripe reintenta.'
+      security: []
+      responses:
+        '200': { description: 'data = { recibido: true, resultado: ok|duplicado|ignorado|sin_empresa|ignorado_livemode }' }
+        '400': { description: PH-PAY-005 }
+  /v1/admin/payments:
+    get:
+      summary: Pagos de todas las empresas o de una (ADMIN)
+      security: [{ sesion: [] }]
+      parameters: [{ name: tenant, in: query, schema: { type: integer } }]
+      responses: { '200': { description: 'data[] como /v1/billing/invoices con empresa; meta = { total, cobrado, stripe: { habilitado, modo } }' } }
+  /v1/admin/tenants/{id}/validity:
+    put:
+      summary: Renovar, ampliar o quitar el vencimiento (ADMIN · fase 9b)
+      security: [{ sesion: [], csrf: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [accion]
+              properties:
+                accion: { type: string, enum: [AMPLIAR, FIJAR, SIN_VENCIMIENTO] }
+                dias: { type: integer, minimum: 1, maximum: 400, default: 30, description: 'AMPLIAR: desde periodo_fin si no ha pasado, si no desde hoy' }
+                periodo_fin: { type: string, format: date, description: 'FIJAR: último día pagado o de prueba' }
+                vigencia: { type: string, enum: [PRUEBA, VIGENTE] }
+                pago_manual:
+                  type: object
+                  description: Registra un pago fuera de Stripe con el IVA vigente
+                  properties:
+                    base: { type: number, minimum: 0 }
+                    nota: { type: string, maxLength: 200 }
+      responses:
+        '200': { description: 'data = Vigencia' }
+        '404': { description: PH-TENANT-001 }
+        '422': { description: PH-VAL-001 }

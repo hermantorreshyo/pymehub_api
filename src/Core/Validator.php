@@ -66,6 +66,7 @@ final class Validator
             'string'  => is_string($v) ? null : 'Debe ser texto',
             'int'     => (is_int($v) || (is_string($v) && ctype_digit($v))) ? null : 'Debe ser un número entero',
             'bool'    => is_bool($v) ? null : 'Debe ser verdadero o falso',
+            'numeric' => (is_int($v) || is_float($v) || (is_string($v) && is_numeric($v))) ? null : 'Debe ser un número',
             'array'   => is_array($v) ? null : 'Debe ser un objeto',
             'email'   => (is_string($v) && filter_var(trim($v), FILTER_VALIDATE_EMAIL) && mb_strlen($v) <= 190) ? null : 'Email no válido',
             'date'    => (is_string($v) && ($d = \DateTimeImmutable::createFromFormat('!Y-m-d', $v)) && $d->format('Y-m-d') === $v) ? null : 'Fecha no válida (AAAA-MM-DD)',

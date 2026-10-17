@@ -24,6 +24,7 @@ final class AdminEmpresaController
     private const SELECT = "SELECT i.id, i.nombre, i.nombre_comercial, i.nif, i.sector, i.email_contacto, i.telefono_contacto,
                                    i.fecha_contrato_encargado, i.estado, i.fecha_baja, i.creado_en,
                                    s.plan, s.ciclo_cobro, s.precio_empleado_mes, s.limite_empleados, s.cuota_ia_diaria, s.fecha_inicio,
+                                   s.vigencia, s.periodo_fin, s.cancelar_al_final, s.stripe_subscription_id, s.empleados_facturados, i.stripe_customer_id,
                                    (SELECT COUNT(*) FROM usuario e JOIN ficha_laboral f ON f.usuario_id = e.id
                                      WHERE e.interlocutor_id = i.id AND e.perfil = 'EMPLEADO' AND e.eliminado_en IS NULL AND f.fecha_baja IS NULL) AS empleados_activos
                               FROM interlocutor i
@@ -68,6 +69,7 @@ final class AdminEmpresaController
             'limite_empleados'         => 'nullable|int|min:1|max:250',
             'fecha_contrato_encargado' => 'nullable|date',
             'estado'                   => 'nullable|in:PILOTO,ACTIVO',
+            'sin_prueba'               => 'nullable|bool',
         ]);
         if (!is_array($gerente)) {
             throw ApiException::validation(['gerente' => 'Obligatorio: nombre, apellidos y email del gerente']);
@@ -93,10 +95,12 @@ final class AdminEmpresaController
                 [$in['nombre'], $in['nombre_comercial'] ?? null, $nif, $in['sector'] ?? null, $in['email_contacto'] ?? null,
                  $in['telefono_contacto'] ?? null, $in['fecha_contrato_encargado'] ?? null, $in['estado'] ?? 'ACTIVO']
             );
+            // Fase 9b: prueba gratuita de suscripcion.dias_prueba días, salvo acuerdo sin prueba
+            $v = \PymeHub\Services\SuscripcionService::vigenciaInicial((bool) ($in['sin_prueba'] ?? false));
             Db::insert(
-                'INSERT INTO suscripcion (interlocutor_id, plan, ciclo_cobro, precio_empleado_mes, limite_empleados, fecha_inicio)
-                 VALUES (?, ?, ?, ?, ?, UTC_DATE())',
-                [$id, $in['plan'], $in['ciclo_cobro'], Parametros::precioMes($in['plan']), $in['limite_empleados'] ?? 250]
+                'INSERT INTO suscripcion (interlocutor_id, plan, ciclo_cobro, precio_empleado_mes, limite_empleados, fecha_inicio, vigencia, periodo_fin)
+                 VALUES (?, ?, ?, ?, ?, UTC_DATE(), ?, ?)',
+                [$id, $in['plan'], $in['ciclo_cobro'], Parametros::precioMes($in['plan']), $in['limite_empleados'] ?? 250, $v['vigencia'], $v['periodo_fin']]
             );
             $gerenteId = UsuarioRepository::create($id, 'EMPRESA', 'GERENTE', $g['nombre'], $g['apellidos'] ?? '', $g['email']);
             $inv = InvitacionService::create($gerenteId, Context::usuarioId());
@@ -150,23 +154,12 @@ final class AdminEmpresaController
                 Db::run('UPDATE interlocutor SET ' . implode(', ', $set) . ' WHERE id = ?', $params);
             }
 
-            $current = Db::one("SELECT * FROM suscripcion WHERE interlocutor_id = ? AND estado = 'VIGENTE' FOR UPDATE", [$id]);
-            $planChange = isset($in['plan']) || isset($in['ciclo_cobro']);
-            if ($current !== null && $planChange && (($in['plan'] ?? $current['plan']) !== $current['plan'] || ($in['ciclo_cobro'] ?? $current['ciclo_cobro']) !== $current['ciclo_cobro'])) {
-                // Cambio de plan o ciclo: se cierra la suscripción y se abre otra (histórico)
-                Db::run("UPDATE suscripcion SET estado = 'FINALIZADA', fecha_fin = UTC_DATE() WHERE id = ?", [$current['id']]);
-                $plan = $in['plan'] ?? $current['plan'];
-                Db::insert(
-                    'INSERT INTO suscripcion (interlocutor_id, plan, ciclo_cobro, precio_empleado_mes, limite_empleados, cuota_ia_diaria, fecha_inicio)
-                     VALUES (?, ?, ?, ?, ?, ?, UTC_DATE())',
-                    [$id, $plan, $in['ciclo_cobro'] ?? $current['ciclo_cobro'], Parametros::precioMes($plan),
-                     $in['limite_empleados'] ?? $current['limite_empleados'], $in['cuota_ia_diaria'] ?? $current['cuota_ia_diaria']]
-                );
-            } elseif ($current !== null && (isset($in['limite_empleados']) || isset($in['cuota_ia_diaria']))) {
-                Db::run(
-                    'UPDATE suscripcion SET limite_empleados = ?, cuota_ia_diaria = ? WHERE id = ?',
-                    [$in['limite_empleados'] ?? $current['limite_empleados'], $in['cuota_ia_diaria'] ?? $current['cuota_ia_diaria'], $current['id']]
-                );
+            // Un cambio de plan o de ciclo abre una fila nueva que conserva la vigencia y el enlace con Stripe
+            $current = Db::one("SELECT plan, ciclo_cobro FROM suscripcion WHERE interlocutor_id = ? AND estado = 'VIGENTE'", [$id]);
+            if ($current !== null) {
+                $limites = array_filter(['limite_empleados' => $in['limite_empleados'] ?? null, 'cuota_ia_diaria' => $in['cuota_ia_diaria'] ?? null],
+                    static fn ($v) => $v !== null);
+                \PymeHub\Services\SuscripcionService::cambiarPlan($id, $in['plan'] ?? $current['plan'], $in['ciclo_cobro'] ?? $current['ciclo_cobro'], $limites);
             }
         });
 
@@ -221,7 +214,10 @@ final class AdminEmpresaController
                 'limite_empleados'    => (int) $r['limite_empleados'],
                 'cuota_ia_diaria'     => (int) $r['cuota_ia_diaria'],
                 'fecha_inicio'        => $r['fecha_inicio'],
+                'empleados_facturados' => $r['empleados_facturados'] === null ? null : (int) $r['empleados_facturados'],
+                'stripe_cliente'      => $r['stripe_customer_id'] !== null,
             ],
+            'vigencia'                 => $r['plan'] === null ? null : \PymeHub\Core\Vigencia::resumen($r),
             'empleados_activos'        => (int) $r['empleados_activos'],
             'creado_en'                => $r['creado_en'],
         ];

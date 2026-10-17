@@ -41,4 +41,13 @@ return [
         'password_admin'   => 'CAMBIAR',      // admin@pymehub.demo, solo pruebas internas: nunca se publica
     ],
     'campaigns' => ['folleto_comercial'],     // campañas admitidas en POST /v1/public/visits
+    // Pagos con Stripe, SOLO EN MODO PRUEBA (fase 9c). Con una clave sk_live_ el pago online se desactiva.
+    // Las claves se copian del panel de Stripe (modo prueba) en el servidor; nunca se versionan ni se comparten.
+    'stripe' => [
+        'enabled'         => false,
+        'secret_key'      => '',   // sk_test_…  (Desarrolladores → Claves de API)
+        'publishable_key' => '',   // pk_test_…  (no la usa la API; se guarda por completitud)
+        'webhook_secret'  => '',   // whsec_…    (Desarrolladores → Webhooks → endpoint de Pyme Hub)
+        // 'api_base'     => 'http://127.0.0.1:12111', // solo pruebas locales con tests/stripe_mock.php
+    ],
 ];

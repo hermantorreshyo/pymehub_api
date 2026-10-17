@@ -67,7 +67,7 @@ Roles (`usuario.perfil`): `ADMIN` (plataforma, no ve datos de empleados), `GEREN
 | — | QR de instalación de la app: ruta `/app` → `#/instalar` | Hecho (API 0.7.1, web 0.7.1) |
 | 9 | Operación: exportación ZIP de la empresa, baja y borrado a los 30 días, derechos RGPD (descargar mis datos, supresión), mantenimiento desde el panel con aviso 48 h, resumen de errores 5xx, prueba de restauración | Hecho (API 0.8.0, web 0.8.0) |
 | 9a | Parámetros de la plataforma (titular pendiente de constitución, precios sin IVA, IVA, descuento anual 0 %), textos legales, «+ IVA» en precios, plantilla de contrato de encargo | Hecho (API 0.8.0, web 0.8.0) |
-| 9b–9c | Vigencia de suscripciones (prueba, vigente, en gracia, vencida) y Stripe en modo prueba (Checkout, portal, webhooks, resumen con base + IVA + total) | Pendiente (v0.9.0) |
+| 9b–9c | Vigencia de suscripciones (prueba, vigente, en gracia, vencida → solo lectura) y Stripe en modo prueba (Checkout, portal, webhooks firmados e idempotentes, resumen con base + IVA + total, cantidad diaria); manual 03 | Hecho (API 0.9.0, web 0.9.0) |
 | 9d | Marketplace Pyme Hub Skills en modo prueba (Stripe Connect, comisión del 20 %, compra de empresa + IVA y de particular IVA incluido) | Pendiente (v0.10.0) |
 | 10 | Cierre: cabeceras de seguridad (nota A), criterios de aceptación, documentación final, capturas del Anexo D | Pendiente (v1.0.0) |
 
@@ -88,6 +88,7 @@ Defensa del TFM: **lunes 19 de octubre de 2026**.
 
 ## 8. Límites
 
+- Stripe solo en modo prueba: claves sk_test_ en config.php con cli/stripe_setup.php, nunca en el chat ni en el repositorio.
 - Los datos del titular de Pyme Hub no existen todavía (sociedad en constitución): nunca inventarlos; viven en Administración → Parámetros.
 
 - Nunca subir secretos (`config/config.php`, `js/config.js`, `storage/`, `.env`).
