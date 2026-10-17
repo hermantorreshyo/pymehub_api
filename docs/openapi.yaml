@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Pyme Hub API
-  version: 0.7.1
+  version: 0.8.0
   description: |
     Contrato entre pymehub_api y pymehub_web (DEC-13).
     Autenticación por cookie de sesión HttpOnly. Toda petición que modifica datos
@@ -563,7 +563,7 @@ paths:
       responses: { '200': { description: ok }, '404': { description: PH-TENANT-001 } }
     patch:
       summary: Datos, estado, plan, ciclo de cobro, límites (perfil ADMIN)
-      description: Un cambio de plan o de ciclo cierra la suscripción vigente y abre otra.
+      description: Un cambio de plan o de ciclo cierra la suscripción vigente y abre otra. Con `estado = BAJA` (RF-111, LEG-017) se fija `fecha_baja` y la respuesta incluye `fecha_borrado` (baja + `operacion.dias_borrado_tras_baja` días); la empresa queda en solo lectura y `cli/tenant_purge.php` la borra en esa fecha. Cualquier otro estado reactiva y anula el borrado.
       security: [{ sesion: [], csrf: [] }]
       parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
       responses: { '200': { description: ok } }
@@ -1338,7 +1338,7 @@ paths:
   /v1/public/visits:
     post:
       summary: Visita de una campaña comercial (público · DMO-030)
-      description: Sin sesión ni CSRF. Cuenta visitas, no visitantes. No guarda IP, User-Agent completo ni identificadores; el dispositivo (MOVIL, ESCRITORIO, OTRO) se deriva del User-Agent en el servidor. Campañas de serie: `folleto_comercial` (QR /demo) e `instalar_app` (QR /app); más las de config.php (`campaigns`) y `prueba_interna` para las pruebas automáticas. Con `medium = instalacion` se registra una instalación de la app completada (evento appinstalled). Límite de 30 peticiones por minuto e IP.
+      description: 'Sin sesión ni CSRF. Cuenta visitas, no visitantes. No guarda IP, User-Agent completo ni identificadores; el dispositivo (MOVIL, ESCRITORIO, OTRO) se deriva del User-Agent en el servidor. Campañas de serie: `folleto_comercial` (QR /demo) e `instalar_app` (QR /app); más las de config.php (`campaigns`) y `prueba_interna` para las pruebas automáticas. Con `medium = instalacion` se registra una instalación de la app completada (evento appinstalled). Límite de 30 peticiones por minuto e IP.'
       security: []
       requestBody:
         content:
@@ -1416,3 +1416,106 @@ paths:
         '200': { description: ok, content: { application/json: { schema: { $ref: '#/components/schemas/Alerta' } } } }
         '404': { description: PH-TENANT-001 }
         '422': { description: PH-VAL-001 }
+  /v1/admin/tenants/{id}/export:
+    get:
+      summary: Exportar todos los datos de una empresa en ZIP (ADMIN · RF-110)
+      security: [{ sesion: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses:
+        '200': { description: 'application/zip (Content-Disposition attachment). LEEME.txt, empresa.json, equipos.csv, empleados.csv, cuentas_gestion.csv, incidencias.csv, formacion.csv, modulos_propios.json, bienestar_semanal_por_equipo.csv (solo grupos de 5 o más), alertas.csv, riesgo_rotacion_ultimo.csv. CSV en UTF-8 con BOM y separador «;». Nunca incluye las notas del check-in.' }
+        '404': { description: PH-TENANT-001 }
+  /v1/company/export:
+    get:
+      summary: Exportar los datos de mi empresa en ZIP (GERENTE · RF-110)
+      description: Mismo contenido que la exportación de la plataforma. Disponible también con la empresa de baja o en solo lectura. No disponible para cuentas demo (PH-DEMO-001).
+      security: [{ sesion: [] }]
+      responses:
+        '200': { description: application/zip }
+        '403': { description: PH-PERM-001 · PH-DEMO-001 }
+  /v1/me/data-export:
+    get:
+      summary: Descargar mis datos (cualquier perfil · RGPD art. 15 y 20)
+      description: JSON descargable con la cuenta (incluida la versión de la privacidad aceptada), la ficha, los check-ins con la nota descifrada, las incidencias, la formación, las preferencias, las consultas al asesor y las puntuaciones de riesgo. No disponible para cuentas demo.
+      security: [{ sesion: [] }]
+      responses:
+        '200': { description: application/json (attachment) }
+        '403': { description: PH-DEMO-001 }
+  /v1/employees/{id}/erase:
+    post:
+      summary: Suprimir los datos de una persona dada de baja (GERENTE · RGPD art. 17)
+      description: Borra check-ins, preferencias, consultas al asesor, puntuaciones, incidencias, asignaciones, invitaciones y alertas; anonimiza nombre y correo. Conserva fechas, motivo, puesto y equipo para los indicadores de rotación. Irreversible.
+      security: [{ sesion: [], csrf: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirmacion]
+              additionalProperties: false
+              properties:
+                confirmacion: { type: string, enum: [SUPRIMIR] }
+      responses:
+        '200': { description: ok }
+        '403': { description: PH-PERM-001 · PH-DEMO-001 }
+        '404': { description: PH-TENANT-001 }
+        '409': { description: 'PH-VAL-001: la persona sigue de alta (antes, darla de baja)' }
+  /v1/public/status:
+    get:
+      summary: Estado público de la plataforma (RNF-063)
+      security: []
+      responses:
+        '200': { description: 'data = { mantenimiento, mensaje, programado: { inicio, fin, mensaje } | null }. El programado aparece desde 48 h antes.' }
+  /v1/admin/maintenance:
+    get:
+      summary: Estado del mantenimiento (ADMIN · RNF-063)
+      security: [{ sesion: [] }]
+      responses: { '200': { description: 'data = { activo, mensaje, programado: { inicio, fin } | null, aviso_horas }' } }
+    put:
+      summary: Activar o programar el mantenimiento (ADMIN · RNF-063)
+      description: Con el mantenimiento activo, la API responde PH-SYS-003 (503) salvo /v1/health, /v1/public/*, /v1/auth/* y /v1/admin/*. Fechas en hora de España (AAAA-MM-DDTHH:MM); el fin debe ser posterior al inicio.
+      security: [{ sesion: [], csrf: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [activo]
+              additionalProperties: false
+              properties:
+                activo: { type: boolean }
+                mensaje: { type: [string, 'null'], maxLength: 200 }
+                programado_inicio: { type: [string, 'null'], example: '2026-10-25T22:00' }
+                programado_fin: { type: [string, 'null'], example: '2026-10-25T22:30' }
+      responses:
+        '200': { description: ok }
+        '422': { description: PH-VAL-001 }
+  /v1/admin/errors:
+    get:
+      summary: Resumen de errores 5xx (ADMIN · RNF-062)
+      security: [{ sesion: [] }]
+      parameters: [{ name: hours, in: query, schema: { type: integer, default: 24, minimum: 1, maximum: 168 } }]
+      responses: { '200': { description: 'data = { horas, total, grupos[{ code, ruta, veces, ultima, correlation_id }] }. Sin datos personales.' } }
+  /v1/public/params:
+    get:
+      summary: Parámetros públicos (fase 9a)
+      description: Titular (pendiente mientras `titular.constituida` es false), precios por empleado y mes sin IVA, IVA, descuento anual, días de prueba, borrado tras la baja, comisión y exención de Skills, versión de los textos legales; y `ejemplos` de importe por plan y ciclo para 1 empleado.
+      security: []
+      responses:
+        '200': { description: 'data = { "titular.constituida", "titular.razon_social", …, "precios.entrada_mes", "precios.completo_mes", "precios.iva_pct", "precios.descuento_anual_pct", "suscripcion.dias_prueba", "legal.version", ejemplos: { ENTRADA|COMPLETO: { MENSUAL|ANUAL: Importe } } }; Importe = { plan, ciclo, empleados, precio_empleado_mes, meses, importe_bruto, descuento_pct, descuento, base, iva_pct, iva, total, moneda }' }
+  /v1/admin/params:
+    get:
+      summary: Parámetros de la plataforma con su definición (ADMIN)
+      security: [{ sesion: [] }]
+      responses: { '200': { description: 'data = [{ clave, tipo (bool|int|money|email|string), grupo, etiqueta, min, max, valor }]' } }
+    put:
+      summary: Cambiar parámetros (ADMIN)
+      description: 'Objeto parcial { clave: valor }. Se valida cada clave (desconocida, tipo y límites) y no se guarda nada si alguna falla. Queda en la auditoría (parametros.actualizados).'
+      security: [{ sesion: [], csrf: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, example: { precios.descuento_anual_pct: 10, titular.constituida: false } }
+      responses:
+        '200': { description: Lista actualizada (como GET) }
+        '422': { description: PH-VAL-001 con el error por clave en details }

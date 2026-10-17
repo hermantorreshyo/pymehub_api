@@ -7,6 +7,7 @@ use PymeHub\Core\ApiException;
 use PymeHub\Core\Audit;
 use PymeHub\Core\Context;
 use PymeHub\Core\Db;
+use PymeHub\Core\Parametros;
 use PymeHub\Core\Plan;
 use PymeHub\Core\Request;
 use PymeHub\Core\Response;
@@ -95,7 +96,7 @@ final class AdminEmpresaController
             Db::insert(
                 'INSERT INTO suscripcion (interlocutor_id, plan, ciclo_cobro, precio_empleado_mes, limite_empleados, fecha_inicio)
                  VALUES (?, ?, ?, ?, ?, UTC_DATE())',
-                [$id, $in['plan'], $in['ciclo_cobro'], Plan::PRECIO[$in['plan']], $in['limite_empleados'] ?? 250]
+                [$id, $in['plan'], $in['ciclo_cobro'], Parametros::precioMes($in['plan']), $in['limite_empleados'] ?? 250]
             );
             $gerenteId = UsuarioRepository::create($id, 'EMPRESA', 'GERENTE', $g['nombre'], $g['apellidos'] ?? '', $g['email']);
             $inv = InvitacionService::create($gerenteId, Context::usuarioId());
@@ -123,7 +124,7 @@ final class AdminEmpresaController
             'email_contacto'           => 'nullable|email',
             'telefono_contacto'        => 'nullable|string|max:30',
             'fecha_contrato_encargado' => 'nullable|date',
-            'estado'                   => 'nullable|in:PILOTO,ACTIVO,SUSPENDIDO',
+            'estado'                   => 'nullable|in:PILOTO,ACTIVO,SUSPENDIDO,BAJA',
             'plan'                     => 'nullable|in:ENTRADA,COMPLETO',
             'ciclo_cobro'              => 'nullable|in:MENSUAL,ANUAL',
             'limite_empleados'         => 'nullable|int|min:1|max:250',
@@ -140,6 +141,10 @@ final class AdminEmpresaController
                     $params[] = $in[$c];
                 }
             }
+            // RF-111, LEG-017: la baja deja la empresa en solo lectura y fija la fecha del borrado definitivo
+            if (isset($in['estado'])) {
+                $set[] = $in['estado'] === 'BAJA' ? 'fecha_baja = COALESCE(fecha_baja, UTC_TIMESTAMP())' : 'fecha_baja = NULL';
+            }
             if ($set !== []) {
                 $params[] = $id;
                 Db::run('UPDATE interlocutor SET ' . implode(', ', $set) . ' WHERE id = ?', $params);
@@ -154,7 +159,7 @@ final class AdminEmpresaController
                 Db::insert(
                     'INSERT INTO suscripcion (interlocutor_id, plan, ciclo_cobro, precio_empleado_mes, limite_empleados, cuota_ia_diaria, fecha_inicio)
                      VALUES (?, ?, ?, ?, ?, ?, UTC_DATE())',
-                    [$id, $plan, $in['ciclo_cobro'] ?? $current['ciclo_cobro'], Plan::PRECIO[$plan],
+                    [$id, $plan, $in['ciclo_cobro'] ?? $current['ciclo_cobro'], Parametros::precioMes($plan),
                      $in['limite_empleados'] ?? $current['limite_empleados'], $in['cuota_ia_diaria'] ?? $current['cuota_ia_diaria']]
                 );
             } elseif ($current !== null && (isset($in['limite_empleados']) || isset($in['cuota_ia_diaria']))) {
@@ -190,7 +195,7 @@ final class AdminEmpresaController
                 'ciclo_cobro' => $r['ciclo_cobro'],
                 'empresas'    => (int) $r['empresas'],
                 'empleados'   => (int) $r['empleados'],
-                'mrr_teorico' => round((int) $r['empleados'] * Plan::PRECIO[$r['plan']], 2),
+                'mrr_teorico' => round((int) $r['empleados'] * Parametros::precioMes($r['plan']), 2),
             ], $mrr),
         ]);
     }
@@ -207,6 +212,8 @@ final class AdminEmpresaController
             'telefono_contacto'        => $r['telefono_contacto'],
             'fecha_contrato_encargado' => $r['fecha_contrato_encargado'],
             'estado'                   => $r['estado'],
+            'fecha_baja'               => $r['fecha_baja'],
+            'fecha_borrado'            => \PymeHub\Services\BorradoService::fechaBorrado($r['fecha_baja']),
             'suscripcion'              => $r['plan'] === null ? null : [
                 'plan'                => $r['plan'],
                 'ciclo_cobro'         => $r['ciclo_cobro'],

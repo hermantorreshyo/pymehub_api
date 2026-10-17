@@ -465,7 +465,7 @@ curl -s https://api.pymehub.hermantorres.com/install -o /dev/null -w "%{http_cod
 curl -s https://api.pymehub.hermantorres.com/config/config.php -o /dev/null -w "%{http_code}\n"   # 404
 ```
 
-**Prueba de humo.** `tests/smoke_test.sh` hace 174 comprobaciones (sesión, CSRF, perfiles, aislamiento entre empresas, organización, bienestar, formación, asesor de IA, riesgo de rotación y línea base, demo comercial, CORS, bloqueo por fuerza bruta). Con la contraseña de la demo como quinto argumento comprueba también el login demo, las sesiones concurrentes, `PH-DEMO-001` y el bloqueo por IP; el sexto es la URL de la web para la redirección `/demo`. Si no puede iniciar sesión como administrador se detiene y lo dice, en lugar de dar decenas de fallos. **Crea dos empresas y varios usuarios de prueba**, así que ejecútala en un entorno de pruebas, o en producción solo antes de cargar datos reales y borrando después lo creado:
+**Prueba de humo.** `tests/smoke_test.sh` hace 211 comprobaciones (sesión, CSRF, perfiles, aislamiento entre empresas, organización, bienestar, formación, asesor de IA, riesgo de rotación y línea base, exportación y derechos RGPD, baja de empresa, mantenimiento, parámetros e IVA, demo comercial, CORS, bloqueo por fuerza bruta). Activa el mantenimiento unos segundos y cambia el descuento anual a 10 % y lo devuelve a 0 %. Con la contraseña de la demo como quinto argumento comprueba también el login demo, las sesiones concurrentes, `PH-DEMO-001` y el bloqueo por IP; el sexto es la URL de la web para la redirección `/demo`. Si no puede iniciar sesión como administrador se detiene y lo dice, en lugar de dar decenas de fallos. **Crea dos empresas y varios usuarios de prueba**, así que ejecútala en un entorno de pruebas, o en producción solo antes de cargar datos reales y borrando después lo creado:
 
 ```bash
 cd /var/www/hermantorres/eude/pymehub/pymehub_api
@@ -505,6 +505,8 @@ API=/var/www/hermantorres/eude/pymehub/pymehub_api
 0 3 * * *  www-data  php $API/cli/recalc_risk.php >> $API/storage/logs/cron.log 2>&1
 # Reinicio de la demo comercial (REQ_QR_DEMO_COMERCIAL, DMO-027): solo empresas es_demo = 1
 30 3 * * *  www-data  php $API/cli/demo_seed.php --reset >> $API/storage/logs/demo_seed.log 2>&1
+# Borrado definitivo de las empresas dadas de baja hace más de 30 días (LEG-017, RF-111)
+30 4 * * *  www-data  php $API/cli/tenant_purge.php >> $API/storage/logs/cron.log 2>&1
 # Revisión de sesgos del motor de riesgo, cada trimestre (LEG-015)
 30 4 1 1,4,7,10 *  www-data  php $API/cli/bias_report.php --salida=$API/storage/logs/sesgos_$(date +\%Y\%m).md >> $API/storage/logs/cron.log 2>&1
 CRON
@@ -514,15 +516,16 @@ systemctl is-active cron && cat /etc/cron.d/pymehub
 
 Las tareas programadas usan la zona horaria del servidor. Si el VPS está en UTC, `0 6 * * 1` son las 08:00 en verano y las 07:00 en invierno en España; es indiferente para el cálculo, que siempre usa semanas en hora de España.
 
-**Prueba la copia y la restauración antes de la defensa** (`RNF-064`):
+**Prueba la copia y la restauración antes de la defensa** (`RNF-064`). `cli/restore_test.sh` restaura la última copia en una base temporal, compara el número de filas de cada tabla con la base en uso, borra la temporal y deja un informe en `storage/logs/restauracion-AAAAMMDD-HHMMSS.md` (evidencia para el anexo). No toca la base de producción:
 
 ```bash
 sudo -u www-data bash /var/www/hermantorres/eude/pymehub/pymehub_api/cli/backup.sh   # "Copia completada con mariadb-dump: …"
 curl -s https://api.pymehub.hermantorres.com/v1/health                                 # "copia_seguridad":"ok"
-sudo mariadb -e "CREATE DATABASE pymehub_restore CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci"
-zcat "$(ls -1t /var/www/hermantorres/eude/pymehub/pymehub_api/storage/backups/db-*.sql.gz | head -1)" | sudo mariadb pymehub_restore
-sudo mariadb -e "SELECT COUNT(*) FROM pymehub_restore.usuario; DROP DATABASE pymehub_restore;"
+sudo bash /var/www/hermantorres/eude/pymehub/pymehub_api/cli/restore_test.sh            # "Restauración correcta: N tablas …"
+ls -1t /var/www/hermantorres/eude/pymehub/pymehub_api/storage/logs/restauracion-*.md | head -1
 ```
+
+Con MySQL u otro socket: `sudo PH_DB_OPTS="--socket=/ruta/mysqld.sock" bash …/cli/restore_test.sh`.
 
 Copia también `storage/backups/` fuera del servidor periódicamente (por ejemplo, con `rsync` a tu equipo).
 
@@ -557,7 +560,9 @@ Orden obligatorio: **primero la API, después la web** (`RNF-067`).
 # 1. Copia previa
 sudo -u www-data bash /var/www/hermantorres/eude/pymehub/pymehub_api/cli/backup.sh
 
-# 2. Mantenimiento (la API responde PH-SYS-003 salvo /v1/health)
+# 2. Mantenimiento (la API responde PH-SYS-003 salvo salud, público, acceso y plataforma).
+#    Desde la v0.8.0 también se activa y se programa desde Administración → Resumen → Mantenimiento;
+#    programado con 48 h de antelación, la web avisa a todas las empresas (RNF-063).
 sudo -u www-data touch /var/www/hermantorres/eude/pymehub/pymehub_api/storage/maintenance.flag
 
 # 3. Código y migraciones
@@ -581,6 +586,24 @@ sudo -u pymehub git fetch --tags && sudo -u pymehub git checkout vX.Y.Z
 zcat "$(ls -1t /var/www/hermantorres/eude/pymehub/pymehub_api/storage/backups/db-*.sql.gz | head -1)" | sudo mariadb pymehub
 cd /var/www/hermantorres/eude/pymehub/pymehub_api && sudo -u pymehub git checkout vVERSION_ANTERIOR
 ```
+
+---
+
+## 16 bis. Operación desde el panel de administración (v0.8.0)
+
+| Tarea | Dónde | Requisito |
+|---|---|---|
+| Activar o programar un mantenimiento (aviso 48 h antes) | Resumen → Mantenimiento | RNF-063 |
+| Errores 5xx de las últimas 24 h, agrupados, con su identificador | Resumen → Errores del servidor | RNF-062 |
+| Exportar todos los datos de una empresa (ZIP) | Empresas → Exportar | RF-110 |
+| Dar de baja una empresa: solo lectura y borrado a los 30 días (`cli/tenant_purge.php`, 04:30) | Empresas → Dar de baja | RF-111, LEG-017 |
+| Datos del titular, precios sin IVA, IVA, descuento anual, prueba, gracia, comisión de Skills y versión legal | Parámetros | Fase 9a |
+
+**Datos del titular.** La sociedad aún no está constituida: los textos legales (`#/legal/aviso`, `privacidad`, `terminos`, `cookies`, `skills`) muestran «Sociedad en constitución» y el correo de contacto. Cuando se constituya, rellena en **Parámetros** la razón social, el NIF, el domicilio y los datos registrales, marca «La sociedad está constituida» y cambia la **versión de los textos legales** (las cuentas nuevas guardan la versión aceptada en `usuario.privacidad_version`). Antes de comercializar, los textos y la plantilla de contrato de encargo (`docs/legal/`) deben revisarse jurídicamente.
+
+**Descuento anual.** Hoy es 0 %. Cuando se acuerde, cámbialo en Parámetros → «Descuento del pago anual (%)»; la landing, los términos y los importes de la API lo aplican al momento.
+
+Simular el borrado de empresas sin borrar nada: `sudo -u www-data php $API/cli/tenant_purge.php --simular`.
 
 ---
 
@@ -621,7 +644,7 @@ cd /var/www/hermantorres/eude/pymehub/pymehub_api && sudo -u pymehub git checkou
 - [ ] HTTPS en ambos subdominios, con redirección desde HTTP.
 - [ ] Asistente completado, `/install` devuelve 404, `config.php` con permisos 640 y copia fuera del servidor.
 - [ ] `/v1/health` en `ok`.
-- [ ] Prueba de humo con 174 correctas (`tests/smoke_test.sh`, con la contraseña de la demo).
+- [ ] Prueba de humo con 211 correctas (`tests/smoke_test.sh`, con la contraseña de la demo).
 - [ ] La web responde 200 en `/` y en `js/config.js`, sin errores en la consola.
 - [ ] `/etc/cron.d/pymehub` activo, primera copia hecha (`copia_seguridad: ok`) y restauración probada.
 - [ ] Catálogo de formación con 15 módulos (`php cli/catalog_sync.php`).

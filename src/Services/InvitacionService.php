@@ -52,9 +52,10 @@ final class InvitacionService
             }
             Db::run(
                 "UPDATE usuario
-                    SET password_hash = ?, estado_acceso = 'ACTIVO', privacidad_aceptada_en = UTC_TIMESTAMP()
+                    SET password_hash = ?, estado_acceso = 'ACTIVO', privacidad_aceptada_en = UTC_TIMESTAMP(), privacidad_version = ?
                   WHERE id = ?",
-                [password_hash($password, PASSWORD_ARGON2ID), (int) $inv['usuario_id']]
+                // LEG-001: se guarda qué versión del aviso de privacidad se aceptó
+                [password_hash($password, PASSWORD_ARGON2ID), (string) \PymeHub\Core\Parametros::get('legal.version', ''), (int) $inv['usuario_id']]
             );
             Db::run('UPDATE invitacion SET usada_en = UTC_TIMESTAMP() WHERE id = ?', [(int) $inv['id']]);
             return ['usuario_id' => (int) $inv['usuario_id'], 'email' => $inv['email']];

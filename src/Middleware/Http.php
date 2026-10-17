@@ -28,7 +28,7 @@ final class Http
         if ($origin !== null && in_array($origin, $allowed, true)) {
             header('Access-Control-Allow-Origin: ' . $origin);
             header('Access-Control-Allow-Credentials: true');
-            header('Access-Control-Expose-Headers: X-Correlation-Id');
+            header('Access-Control-Expose-Headers: X-Correlation-Id, Content-Disposition');
             header('Vary: Origin');
         }
 

@@ -418,6 +418,7 @@ API=/var/www/hermantorres/eude/pymehub/pymehub_api
 0 6 * * 1  www-data  php $API/cli/wellbeing_alerts.php >> $API/storage/logs/cron.log 2>&1
 0 3 * * *  www-data  php $API/cli/recalc_risk.php >> $API/storage/logs/cron.log 2>&1
 30 3 * * *  www-data  php $API/cli/demo_seed.php --reset >> $API/storage/logs/demo_seed.log 2>&1
+30 4 * * *  www-data  php $API/cli/tenant_purge.php >> $API/storage/logs/cron.log 2>&1
 30 4 1 1,4,7,10 *  www-data  php $API/cli/bias_report.php --salida=$API/storage/logs/sesgos_$(date +\%Y\%m).md >> $API/storage/logs/cron.log 2>&1
 CRON
 sudo chmod 644 /etc/cron.d/pymehub
@@ -621,9 +622,10 @@ Si una migración falla, restaura la copia del primer comando y vuelve a la etiq
 - [ ] `hermantorres.com/eude/...` no expone el proyecto.
 - [ ] `config.js` de la web creado.
 - [ ] Instalador completado, `/install` 404, `config.php` 640 y copia fuera del servidor.
-- [ ] `/etc/cron.d/pymehub` con copias, retención, alertas, riesgo diario (03:00) y sesgos trimestrales; primera copia hecha; restauración probada.
-- [ ] `/v1/health` en `ok` con versión 0.5.0 y `copia_seguridad: ok`.
-- [ ] Prueba de humo 174/174 y datos de demo regenerados (y `ai_warmup` si hay clave).
+- [ ] `/etc/cron.d/pymehub` con copias, retención, alertas, riesgo diario (03:00), borrado de empresas de baja (04:30) y sesgos trimestrales; primera copia hecha; `sudo bash $API/cli/restore_test.sh` correcto (informe en `storage/logs/restauracion-*.md`).
+- [ ] `/v1/health` en `ok` con versión 0.8.0 y `copia_seguridad: ok`.
+- [ ] Prueba de humo 211/211 y datos de demo regenerados (y `ai_warmup` si hay clave).
 - [ ] `curl -sI https://pymehub.hermantorres.com/demo` da 302 con `modo=demo`, y el QR impreso abre el panel «Pruebe Pyme Hub» en dos móviles.
 - [ ] Recorrido en navegador sin errores de consola; notas A externas.
 - [ ] Monitor externo activo.
+- [ ] Administración → Parámetros revisado: titular pendiente de constitución, precios 15 / 29 € sin IVA, IVA 21 %, descuento anual 0 %. Textos legales visibles en `#/legal/privacidad`.

@@ -2,6 +2,53 @@
 
 Formato basado en *Keep a Changelog*; versiones SemVer.
 
+## [0.8.0] · 2026-10-17
+
+**Operación (fase 9) y parámetros, textos legales e IVA (fase 9a).** **Migración nueva: `0008_parametros_legal`.** Sin cambios en `config.php`. Nueva tarea programada: `cli/tenant_purge.php` (04:30).
+
+### Base de datos
+- `0008_parametros_legal`:
+  - tabla `parametro` (`clave`, `valor` JSON, `actualizado_en`, `actualizado_por`) con los valores iniciales:
+    - titular pendiente de constitución, con el contacto info@hyo.company;
+    - 15 y 29 € sin IVA; IVA 21 %; descuento anual 0 %;
+    - 30 días de prueba y 7 de gracia; borrado 30 días tras la baja;
+    - comisión de Skills del 20 %, exención de IVA sin confirmar;
+    - versión legal 2026-10-17.
+  - `usuario.privacidad_version`.
+  - Probada en MariaDB 11.8.3 y MySQL.
+
+### Núcleo
+- `Core/Parametros` (`RF-112`): definición con tipo, grupo y límites; caché; validación por clave. Incluye `importe()`, que calcula base, descuento anual, IVA y total. `Plan::PRECIO` desaparece: los precios salen de los parámetros.
+- `Core/Zip`: ZIP en memoria sin `ext-zip`, más CSV en UTF-8 con BOM y protegido contra la inyección de fórmulas.
+- `Core/Mantenimiento` (`RNF-063`): mantenimiento activo con `storage/maintenance.flag`; ventana programada y mensaje en `storage/maintenance.json`. Salud, rutas públicas, acceso y plataforma siguen respondiendo.
+- `Services/BorradoService`: borrado de empresas y personas en todas las tablas, con la auditoría anonimizada. Lo comparten la purga de empresas y el reinicio de la demo.
+- `Services/ExportacionService` (`RF-110`, `RF-113`): ZIP de la empresa y JSON de la persona.
+- Los errores 5xx se registran con código, método y ruta (`RNF-062`).
+- Al aceptar la invitación se guarda la versión de la privacidad aceptada (`LEG-022`).
+
+### Endpoints
+- `GET /v1/admin/tenants/{id}/export` y `GET /v1/company/export` (`RF-110`).
+- `GET /v1/me/data-export` (`RF-113`, RGPD art. 15 y 20).
+- `POST /v1/employees/{id}/erase` (`LEG-007`): `{"confirmacion":"SUPRIMIR"}`, solo para personas de baja.
+- `PATCH /v1/admin/tenants/{id}` con `estado = BAJA` (`RF-111`, `LEG-017`): fecha de baja y `fecha_borrado`; reactivar la anula. `GET /v1/auth/me` incluye `fecha_borrado`.
+- `GET /v1/public/status`, `GET`/`PUT /v1/admin/maintenance` (`RNF-063`).
+- `GET /v1/admin/errors` (`RNF-062`).
+- `GET /v1/public/params`, con ejemplos de importe por plan y ciclo, y `GET`/`PUT /v1/admin/params` (`RF-112`, `LEG-019`, `LEG-020`).
+- Exportar, descargar datos y suprimir no están disponibles en la demo (`PH-DEMO-001`).
+
+### Operación
+- `cli/tenant_purge.php [--simular]`: borra las empresas con más de 30 días de baja (`LEG-017`).
+- `cli/restore_test.sh` (`RNF-064`): restaura la última copia en una base temporal, compara las filas por tabla y deja un informe en `storage/logs/restauracion-*.md`.
+
+### Pruebas y documentación
+- Prueba de humo: **211 comprobaciones**, correctas en MariaDB 11.8.3 y MySQL. Cubren exportación, RGPD, baja de empresa, mantenimiento, errores, parámetros, importes con IVA y descuento, validación y CSRF.
+- OpenAPI 0.8.0, que además corrige dos descripciones que hacían inválido el YAML.
+- Colección de Postman: carpetas 17 y 18.
+- Requisitos v0.9.7 (`LEG-018` a `LEG-022`, `RF-112`, `RF-113`, §17.5).
+- `MODELO_DATOS` actualizado.
+- Manuales 01 y 02: cron 04:30, prueba de restauración, operación desde el panel y datos del titular.
+- Plantilla `docs/legal/CONTRATO_ENCARGO_TRATAMIENTO.md` (`LEG-021`).
+
 ## [0.7.1] · 2026-10-17
 
 **QR de instalación de la app.** Sin migraciones ni cambios en `config.php`.

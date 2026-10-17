@@ -107,9 +107,9 @@ erDiagram
 |---|---|---|
 | `cat_tipo_interlocutor` | Tipos de actor | `PLATAFORMA`, `EMPRESA`, `FORMADOR` |
 | `cat_perfil` | Perfiles admitidos por tipo | |
-| `interlocutor` | Todos los actores | Estado `PILOTO`, `ACTIVO`, `SUSPENDIDO`, `BAJA`. `es_demo` (0007): empresa de la demo comercial, que el reinicio nocturno regenera |
+| `interlocutor` | Todos los actores | Estado `PILOTO`, `ACTIVO`, `SUSPENDIDO`, `BAJA`; con `BAJA`, `fecha_baja` marca el inicio del plazo de borrado definitivo (`cli/tenant_purge.php`, LEG-017). `es_demo` (0007): empresa de la demo comercial, que el reinicio nocturno regenera |
 | `suscripcion` | Plan y ciclo de cobro de una empresa | Histórico; una vigente |
-| `usuario` | Personas con perfil | Email único global; contraseña Argon2id. `es_demo` (0007): cuenta de la demo comercial, con restricciones `PH-DEMO-001` y bloqueo por IP |
+| `usuario` | Personas con perfil | Email único global; contraseña Argon2id. `privacidad_aceptada_en` y `privacidad_version` (0008): cuándo y qué versión de la privacidad aceptó (LEG-022). La supresión (LEG-007) anonimiza nombre y correo y fija `eliminado_en`. `es_demo` (0007): cuenta de la demo comercial, con restricciones `PH-DEMO-001` y bloqueo por IP |
 | `invitacion` | Enlaces de un solo uso | Solo se guarda el hash SHA-256; 72 h |
 | `equipo` | Equipos de la empresa | Nombre único entre los vigentes; no se borra si tiene empleados de alta |
 | `ficha_laboral` | Datos laborales del empleado | `motivo_baja` permite medir la rotación voluntaria |
@@ -126,6 +126,7 @@ erDiagram
 | `respuesta_ia` | Caché del asesor (0005, `IA-014`) | Clave: hash de la entrada normalizada (perfil no identificativo, preferencias, catálogo y versión del prompt). Solo la salida validada; 7 días, sin caducidad las pregeneradas para la demo (`cli/ai_warmup.php`) |
 | `registro_auditoria` | Acciones sensibles | Solo inserción. `LOGIN_DEMO` (con el perfil en `entidad` y sin IP) cuenta las entradas en la demo comercial y se conserva al reiniciarla |
 | `visita_campania` | Visitas de campaña (QR del folleto) | 0007. Campaña, origen, medio, dispositivo (`MOVIL`, `ESCRITORIO`, `OTRO`) y fecha. Sin IP, User-Agent ni identificadores: no hay datos personales |
+| `parametro` | Parámetros de la plataforma (0008, RF-112) | `clave` (PK, p. ej. `precios.descuento_anual_pct`), `valor` JSON en `TEXT`, `actualizado_en`, `actualizado_por` (FK a `usuario`). Titular (pendiente de constitución), precios sin IVA, IVA, descuento anual, prueba, gracia, borrado tras la baja, Skills y versión legal. Definición y límites en `Core/Parametros::DEF` |
 | `limite_peticion` | Limitación de peticiones | |
 | `migracion_esquema` | Versiones aplicadas | La crea el migrador |
 

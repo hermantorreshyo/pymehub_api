@@ -2,7 +2,7 @@
 
 **Proyecto:** Pyme Hub — TFM EUDE Business School (The Best Team)
 **Documento:** Especificación de requerimientos técnicos del Producto Mínimo Viable (MVP)
-**Versión:** 0.9.6 · 17/10/2026
+**Versión:** 0.9.7 · 17/10/2026
 **Stack:** LAMP nativo, sin Docker (Linux · Apache · **MariaDB 11.8 LTS o MySQL 8.4 LTS** · PHP 8.4). Producción: MariaDB 11.8
 **Repositorios:** dos, independientes: `pymehub_api` (backend tipo API) y `pymehub_web` (frontend que consume la API)
 **Estado:** Alineado con la versión 4 del documento del TFM (carpeta *Revisión 004*). Los cambios que este documento obliga a trasladar al TFM se listan en §22.3.
@@ -26,6 +26,7 @@
 | 0.9.4 | 12/10/2026 | Fase 7 (IA de RR. HH.): §8.4 con `GET /v1/risk/bias` y `GET/PUT /v1/baseline`; §9.6 con la implementación (puntuación diaria, alerta solo al pasar a alto, recálculo limitado, retrospectiva, línea base homogénea en ausencias injustificadas, cron de sesgos) |
 | 0.9.5 | 13/10/2026 | Demo comercial y QR del folleto (`docs/requerimientos/REQ_QR_DEMO_COMERCIAL.md`, `DMO-*`): §18.1 con la ruta `/demo`, usuarios demo con restricciones, reinicio nocturno y métricas; `PH-DEMO-001` y `PH-DEMO-002` en §16 |
 | 0.9.6 | 17/10/2026 | QR de instalación de la app: ruta estable `/app` → página `#/instalar` (§13.7, §18.1) |
+| 0.9.7 | 17/10/2026 | Fases 9 y 9a (v0.8.0): implementación de `RF-110`, `RF-111`, `RNF-062`, `RNF-063`, `RNF-064` y `LEG-007`/`LEG-017` (§17.5); nuevos `LEG-018` a `LEG-022` (textos legales, titular parametrizado, IVA y precios, contrato de encargo, versión aceptada) y `RF-112`/`RF-113` (parámetros de la plataforma, derecho de acceso del propio usuario) en §15 y §17.4 |
 
 ---
 
@@ -858,6 +859,11 @@ Coincidencia visual general con el mockup; funciona en escritorio, tableta y mó
 | `LEG-016` | S | **Contrato de encargado del tratamiento**: no se pueden invitar empleados de una empresa sin `interlocutor.fecha_contrato_encargado` registrada (`PH-TENANT-003`). Los proveedores que tratan datos personales (Hostinger) constan como subencargados; Mistral no recibe datos personales (`LEG-010`) |
 | `LEG-017` | M | **Baja de la empresa cliente** (TFM, apartado 9.8): exportación completa de sus datos (`RF-110`) y borrado definitivo a los 30 días de la baja, salvo otro plazo pactado en el contrato |
 | `LEG-014` | M | Las preferencias formativas y el comentario libre del empleado solo los ve él; puede editarlos o borrarlos, y se incluyen en su exportación de datos (`LEG-007`) |
+| `LEG-018` | M | **Textos legales públicos** (`#/legal/aviso`, `privacidad`, `terminos`, `cookies`, `skills`), accesibles con y sin sesión y enlazados desde la landing, el acceso, la invitación y «Más». Borradores marcados «pendiente de revisión jurídica» |
+| `LEG-019` | M | **Titular parametrizado**: razón social, NIF, domicilio, datos registrales y contactos viven en los parámetros (`titular.*`). Mientras `titular.constituida` es falso, los textos indican «Sociedad en constitución» y el correo de contacto; nunca datos inventados |
+| `LEG-020` | M | **Precios e IVA**: precios de los planes sin IVA con «+ IVA» junto a cada importe (también en el pago anual) y la nota «Precios para empresas. IVA (21 %) no incluido.»; todo pedido o factura desglosa base, IVA y total (`Parametros::importe`). Excepción: en Pyme Hub Skills la compra de un particular se muestra con IVA incluido; la posible exención de la formación la confirma la gestoría (`marketplace.formacion_exenta_iva`) |
+| `LEG-021` | M | **Contrato de encargo del tratamiento**: plantilla en `docs/legal/CONTRATO_ENCARGO_TRATAMIENTO.md` (art. 28 RGPD), complementa `LEG-016` |
+| `LEG-022` | S | **Versión aceptada**: cada cuenta guarda la versión de la privacidad aceptada (`usuario.privacidad_version`), que se incluye en su exportación |
 
 ---
 
@@ -936,8 +942,20 @@ Coincidencia visual general con el mockup; funciona en escritorio, tableta y mó
 | `RNF-065` | S | Las actualizaciones de seguridad del sistema operativo son responsabilidad del administrador del VPS y quedan fuera del proyecto, que no modifica la configuración global (`RNF-001`) |
 | `RF-110` | M | **Exportación completa de una empresa**: archivo ZIP con CSV/JSON de empleados, equipos, incidencias, formación y agregados de bienestar (sin notas cifradas), generado por el administrador al solicitar la baja |
 | `RF-111` | M | **Baja de una empresa**: estado `baja`, acceso de solo lectura para gerente y RR. HH. hasta el borrado definitivo (`LEG-017`) |
+| `RF-112` | M | **Parámetros de la plataforma** (tabla `parametro`), editables por el administrador sin desplegar: titular, precios sin IVA, IVA, descuento del pago anual (0 % hasta que se acuerde), días de prueba y de gracia, días hasta el borrado tras la baja, comisión y exención de IVA de Skills y versión de los textos legales. Validados por tipo y límites; cambios auditados |
+| `RF-113` | M | **Derecho de acceso y portabilidad del propio usuario**: «Descargar mis datos» (`GET /v1/me/data-export`), con la nota del check-in descifrada; no disponible en la demo |
 
 ---
+
+### 17.5 Implementación de la operación (v0.8.0)
+
+- **Exportación** (`RF-110`): ZIP generado en memoria sin depender de `ext-zip` (`Core/Zip`), con CSV en UTF-8 con BOM y separador `;`, protegidos contra la inyección de fórmulas. Bienestar solo agregado por equipo y semana con 5 o más personas (`LEG-002`); nunca notas. La descarga el administrador (`GET /v1/admin/tenants/{id}/export`) o el gerente (`GET /v1/company/export`), también con la empresa de baja.
+- **Supresión** (`LEG-007`): `POST /v1/employees/{id}/erase` con `{"confirmacion":"SUPRIMIR"}`, solo para personas ya de baja. Borra los datos personales y anonimiza la cuenta; conserva fechas, motivo, puesto y equipo para los indicadores de rotación.
+- **Baja y borrado** (`RF-111`, `LEG-017`): `estado = BAJA` fija `fecha_baja`; `cli/tenant_purge.php` (diario, 04:30) borra las empresas con más de `operacion.dias_borrado_tras_baja` días de baja con `BorradoService`, el mismo que usa el reinicio de la demo. La auditoría se conserva anonimizada.
+- **Mantenimiento** (`RNF-063`): `storage/maintenance.flag` (activo) y `storage/maintenance.json` (mensaje y ventana programada), gestionados desde el panel; `GET /v1/public/status` publica la ventana desde 48 h antes y la web muestra el aviso a todas las personas usuarias.
+- **Errores** (`RNF-062`): los 5xx se registran con código, método y ruta; `GET /v1/admin/errors` los agrupa sin datos personales.
+- **Restauración** (`RNF-064`): `cli/restore_test.sh` restaura la última copia en una base temporal, compara filas por tabla y deja un informe.
+- **Demo**: exportar, descargar datos y suprimir devuelven `PH-DEMO-001`.
 
 ## 18. Datos de demostración
 

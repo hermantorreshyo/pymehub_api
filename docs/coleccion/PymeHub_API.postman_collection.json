@@ -2,7 +2,7 @@
   "info": {
     "name": "Pyme Hub API v1",
     "_postman_id": "a3d4c0e2-5b1f-5e7c-9d2a-3f6b8c1e0d47",
-    "description": "Colección de la API de Pyme Hub (MVP, TFM EUDE).\n\nUso: 1) importa también el entorno de docs/coleccion; 2) ejecuta 'Login' (guarda la cookie y el token CSRF); 3) las peticiones que modifican datos envían X-CSRF-Token: {{csrf}}.\nContrato completo: docs/openapi.yaml. Se amplía con cada avance (v0.3.0: bienestar y alertas).",
+    "description": "Colección de la API de Pyme Hub (MVP, TFM EUDE).\n\nUso: 1) importa también el entorno de docs/coleccion; 2) ejecuta 'Login' (guarda la cookie y el token CSRF); 3) las peticiones que modifican datos envían X-CSRF-Token: {{csrf}}.\nContrato completo: docs/openapi.yaml. Se amplía con cada avance (v0.8.0: operación, RGPD y parámetros).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -2394,6 +2394,481 @@
               ]
             },
             "description": "DMO-035. Inicia sesión como administrador antes (carpeta 01)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "17 · Operación y RGPD (fase 9)",
+      "item": [
+        {
+          "name": "Exportar mi empresa (GERENTE)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/company/export",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "company",
+                "export"
+              ]
+            },
+            "description": "RF-110. ZIP con CSV y JSON. Usa «Send and Download». PH-DEMO-001 con cuentas demo."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Exportar una empresa (ADMIN)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/tenants/{{empresa_id}}/export",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "tenants",
+                "{{empresa_id}}",
+                "export"
+              ]
+            },
+            "description": "RF-110."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Descargar mis datos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/me/data-export",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "me",
+                "data-export"
+              ]
+            },
+            "description": "RGPD art. 15 y 20. JSON con la nota del check-in descifrada."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Suprimir a una persona dada de baja (GERENTE)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/employees/{{empleado_id}}/erase",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "employees",
+                "{{empleado_id}}",
+                "erase"
+              ]
+            },
+            "description": "RGPD art. 17. Irreversible; la persona debe estar de baja.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"confirmacion\": \"SUPRIMIR\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Dar de baja una empresa (ADMIN)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/tenants/{{empresa_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "tenants",
+                "{{empresa_id}}"
+              ]
+            },
+            "description": "RF-111, LEG-017. Devuelve fecha_borrado.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"BAJA\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Estado público (mantenimiento)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/public/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "public",
+                "status"
+              ]
+            },
+            "description": "RNF-063. Sin sesión."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ver el mantenimiento (ADMIN)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/maintenance",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "maintenance"
+              ]
+            },
+            "description": "RNF-063."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Programar un mantenimiento (ADMIN)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/maintenance",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "maintenance"
+              ]
+            },
+            "description": "RNF-063. Hora de España.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"activo\": false,\n  \"mensaje\": \"Actualización de Pyme Hub\",\n  \"programado_inicio\": \"2026-10-25T22:00\",\n  \"programado_fin\": \"2026-10-25T22:30\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Errores 5xx de 24 h (ADMIN)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/errors?hours=24",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "errors"
+              ],
+              "query": [
+                {
+                  "key": "hours",
+                  "value": "24"
+                }
+              ]
+            },
+            "description": "RNF-062."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "18 · Parámetros y precios (fase 9a)",
+      "item": [
+        {
+          "name": "Parámetros públicos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/public/params",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "public",
+                "params"
+              ]
+            },
+            "description": "Titular, precios sin IVA, IVA, descuento anual y ejemplos de importe. Sin sesión."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Parámetros (ADMIN)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/params",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "params"
+              ]
+            },
+            "description": "Definición y valor de cada parámetro."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Fijar el descuento anual (ADMIN)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/params",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "params"
+              ]
+            },
+            "description": "Objeto parcial { clave: valor }.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"precios.descuento_anual_pct\": 0\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Datos del titular al constituir la sociedad (ADMIN)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/params",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "params"
+              ]
+            },
+            "description": "Rellenar cuando la sociedad esté constituida.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titular.constituida\": true,\n  \"titular.razon_social\": \"Pyme Hub S.L.\",\n  \"titular.nif\": \"B00000000\",\n  \"titular.domicilio\": \"…\",\n  \"titular.registro_mercantil\": \"Registro Mercantil de …\"\n}"
+            }
           },
           "event": [
             {

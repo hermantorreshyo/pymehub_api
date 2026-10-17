@@ -264,12 +264,59 @@ check "línea base de 2 meses -> PH-VAL-001" "$(send h PUT "$CH" /v1/baseline "{
 check "línea base con plantilla no numérica -> PH-VAL-001" "$(send h PUT "$CH" /v1/baseline "{\"periodo_inicio\":\"$LB1\",\"periodo_fin\":\"$LB2\",\"plantilla_media\":\"veinte\",\"bajas_voluntarias\":5,\"dias_absentismo\":30}" | code)" "PH-VAL-001"
 check "registrar línea base: rotación 25 % y periodo corto" "$(send h PUT "$CH" /v1/baseline "{\"periodo_inicio\":\"$LB1\",\"periodo_fin\":\"$LB2\",\"plantilla_media\":20,\"bajas_voluntarias\":5,\"dias_absentismo\":30,\"fuente\":\"Nóminas 2025\"}" | jq_ "str(d['data']['linea_base']['rotacion_voluntaria'])+' '+str(d['data']['comparacion']['periodo_corto'])+' '+str(d['data']['comparacion']['objetivo_piloto'])")" "25 True -15"
 
+echo "== Operación (fase 9): portabilidad y derechos RGPD"
+curl -s -b "$T/e" -D "$T/de.h" "$B/v1/me/data-export" > "$T/de.json"
+check "el empleado descarga sus datos con su nota descifrada (RGPD art. 15)" "$(jq_ "d['persona']['email']=='emp$R@prueba.test' and any(c['nota']=='Nota privada de prueba' for c in d['checkins_bienestar'])" < "$T/de.json") $(grep -ic 'content-disposition: attachment' "$T/de.h")" "True 1"
+check "la cuenta guarda la versión de la privacidad aceptada (LEG-001)" "$(jq_ "d['persona']['privacidad_version'] == '$(curl -s "$B/v1/public/params" | jq_ "d['data']['legal.version']")'" < "$T/de.json")" "True"
+curl -s -b "$T/g" -D "$T/ce.h" -o "$T/ce.zip" "$B/v1/company/export"
+check "el gerente exporta su empresa en ZIP (RF-110)" "$(head -c 2 "$T/ce.zip") $(grep -ic 'content-type: application/zip' "$T/ce.h")" "PK 1"
+check "el ZIP trae empleados sin notas del check-in" "$(python3 -c "import zipfile,sys;z=zipfile.ZipFile(sys.argv[1]);n=z.namelist();print('empleados.csv' in n and 'bienestar_semanal_por_equipo.csv' in n and b'Nota privada' not in b''.join(z.read(x) for x in n))" "$T/ce.zip")" "True"
+check "RR. HH. no exporta la empresa -> PH-PERM-001" "$(curl -s -b "$T/h" "$B/v1/company/export" | code)" "PH-PERM-001"
+check "la plataforma exporta una empresa" "$(curl -s -b "$T/a" -o /dev/null -w '%{http_code} %{content_type}' "$B/v1/admin/tenants/$EMP2/export")" "200 application/zip"
+check "suprimir a alguien de alta -> PH-VAL-001 (antes, la baja)" "$(send g POST "$CG" "/v1/employees/$EID/erase" '{"confirmacion":"SUPRIMIR"}' | code)" "PH-VAL-001"
+
 echo "== Baja laboral"
 check "motivo no válido -> PH-VAL-001" "$(send h DELETE "$CH" "/v1/employees/$EID" "{\"fecha_baja\":\"$HOY\",\"motivo_baja\":\"DESPIDO\"}" | code)" "PH-VAL-001"
 check "baja con motivo y sin acceso" "$(send h DELETE "$CH" "/v1/employees/$EID" "{\"fecha_baja\":\"$HOY\",\"motivo_baja\":\"VOLUNTARIA\"}" | campos 'motivo_baja estado_acceso')" "VOLUNTARIA BAJA"
 check "ficha de baja en solo lectura -> PH-VAL-001" "$(send h PATCH "$CH" "/v1/employees/$EID" '{"turno":"NOCHE"}' | code)" "PH-VAL-001"
 check "la baja sale de la lista de altas" "$(total h /v1/employees)" "3"
 check "y aparece en las bajas" "$(total h '/v1/employees?situacion=BAJA')" "1"
+check "supresión sin confirmar -> PH-VAL-001" "$(send g POST "$CG" "/v1/employees/$EID/erase" '{"confirmacion":"si"}' | code)" "PH-VAL-001"
+check "RR. HH. no suprime -> PH-PERM-001" "$(send h POST "$CH" "/v1/employees/$EID/erase" '{"confirmacion":"SUPRIMIR"}' | code)" "PH-PERM-001"
+check "suprimir los datos de la persona (RGPD art. 17)" "$(curl -s -b "$T/g" -X POST -H "$J" -H "X-CSRF-Token: $CG" -o /dev/null -w '%{http_code}' "$B/v1/employees/$EID/erase" -d '{"confirmacion":"SUPRIMIR"}')" "204"
+check "la persona suprimida ya no aparece" "$(curl -s -b "$T/h" "$B/v1/employees/$EID" | code) $(total h '/v1/employees?situacion=BAJA')" "PH-TENANT-001 0"
+check "la rotación de la empresa la sigue contando" "$(curl -s -b "$T/g" "$B/v1/dashboard/overview" | jq_ "d['data']['bajas_12m']")" "1"
+
+echo "== Operación (fase 9): baja de empresa, mantenimiento y errores"
+check "baja de la empresa con fecha de borrado (RF-111, LEG-017)" "$(send a PATCH "$CA" "/v1/admin/tenants/$EMP2" '{"estado":"BAJA"}' | jq_ "d['data']['estado']+' '+str(d['data']['fecha_borrado'] is not None)")" "BAJA True"
+check "empresa de baja: solo lectura -> PH-TENANT-004" "$(send t POST "$CT" /v1/teams '{"nombre":"Nuevo"}' | code)" "PH-TENANT-004"
+check "empresa de baja: puede consultar y exportar" "$(curl -s -b "$T/t" "$B/v1/auth/me" | jq_ "str(d['data']['interlocutor']['fecha_borrado'] is not None)") $(curl -s -b "$T/t" -o /dev/null -w '%{http_code}' "$B/v1/company/export")" "True 200"
+check "reactivar la empresa quita la fecha de borrado" "$(send a PATCH "$CA" "/v1/admin/tenants/$EMP2" '{"estado":"ACTIVO"}' | jq_ "str(d['data']['fecha_borrado'])")" "None"
+FUT1=$(date -d '+2 hours' +%Y-%m-%dT%H:%M); FUT2=$(date -d '+3 hours' +%Y-%m-%dT%H:%M)
+check "programar un mantenimiento (RNF-063)" "$(send a PUT "$CA" /v1/admin/maintenance "{\"activo\":false,\"mensaje\":\"Actualización de prueba\",\"programado_inicio\":\"$FUT1\",\"programado_fin\":\"$FUT2\"}" | jq_ "str(d['data']['activo'])+' '+str(d['data']['programado'] is not None)")" "False True"
+check "aviso público del mantenimiento programado" "$(curl -s "$B/v1/public/status" | jq_ "str(d['data']['mantenimiento'])+' '+d['data']['programado']['mensaje']")" "False Actualización de prueba"
+check "ventana con el fin antes del inicio -> PH-VAL-001" "$(send a PUT "$CA" /v1/admin/maintenance "{\"activo\":false,\"programado_inicio\":\"$FUT2\",\"programado_fin\":\"$FUT1\"}" | code)" "PH-VAL-001"
+send a PUT "$CA" /v1/admin/maintenance '{"activo":true,"mensaje":"Volvemos en 5 minutos"}' > /dev/null
+check "mantenimiento activo: la app responde PH-SYS-003" "$(curl -s -b "$T/h" "$B/v1/teams" | jq_ "d['error']['code']+' '+d['error']['message']")" "PH-SYS-003 Volvemos en 5 minutos"
+check "mantenimiento activo: la plataforma y la salud siguen" "$(curl -s -b "$T/a" -o /dev/null -w '%{http_code}' "$B/v1/admin/maintenance") $(curl -s -o /dev/null -w '%{http_code}' "$B/v1/health")" "200 200"
+check "desactivar el mantenimiento" "$(send a PUT "$CA" /v1/admin/maintenance '{"activo":false}' | jq_ "str(d['data']['activo'])+' '+str(d['data']['programado'])") $(curl -s -b "$T/h" -o /dev/null -w '%{http_code}' "$B/v1/teams")" "False None 200"
+check "la gestión no toca el mantenimiento -> PH-PERM-001" "$(curl -s -b "$T/h" "$B/v1/admin/maintenance" | code)" "PH-PERM-001"
+check "resumen de errores 5xx (RNF-062)" "$(curl -s -b "$T/a" "$B/v1/admin/errors?hours=24" | jq_ "str(d['data']['horas'])+' '+str(isinstance(d['data']['grupos'], list))")" "24 True"
+
+echo "== Parámetros, textos legales e IVA (fase 9a)"
+check "parámetros públicos: titular pendiente de constitución" "$(curl -s "$B/v1/public/params" | jq_ "str(d['data']['titular.constituida'])+' '+d['data']['titular.email']")" "False info@hyo.company"
+check "ejemplo mensual: base, IVA 21 % y total" "$(curl -s "$B/v1/public/params" | jq_ "' '.join(str(d['data']['ejemplos']['ENTRADA']['MENSUAL'][k]) for k in ('base','iva_pct','iva','total'))")" "15 21 3.15 18.15"
+check "ejemplo anual sin descuento (12 meses)" "$(curl -s "$B/v1/public/params" | jq_ "' '.join(str(d['data']['ejemplos']['COMPLETO']['ANUAL'][k]) for k in ('base','descuento','total'))")" "348 0 421.08"
+check "los parámetros públicos no exponen los días de gracia" "$(curl -s "$B/v1/public/params" | jq_ "str('suscripcion.dias_gracia' in d['data'])")" "False"
+check "la plataforma lista los parámetros" "$(curl -s -b "$T/a" "$B/v1/admin/params" | jq_ "str(len(d['data']) >= 18)+' '+str(any(p['clave']=='precios.descuento_anual_pct' for p in d['data']))")" "True True"
+check "descuento anual del 10 % -> ejemplo anual con descuento" "$(send a PUT "$CA" /v1/admin/params '{"precios.descuento_anual_pct":10}' > /dev/null; curl -s "$B/v1/public/params" | jq_ "' '.join(str(d['data']['ejemplos']['ENTRADA']['ANUAL'][k]) for k in ('descuento','base','total'))")" "18 162 196.02"
+check "descuento fuera de rango -> PH-VAL-001 con el campo" "$(send a PUT "$CA" /v1/admin/params '{"precios.descuento_anual_pct":80}' | jq_ "d['error']['code']+' '+str('precios.descuento_anual_pct' in d['error'].get('details',{}))")" "PH-VAL-001 True"
+check "parámetro desconocido -> PH-VAL-001" "$(send a PUT "$CA" /v1/admin/params '{"precios.otro":1}' | code)" "PH-VAL-001"
+check "tipo incorrecto -> PH-VAL-001" "$(send a PUT "$CA" /v1/admin/params '{"titular.constituida":"si"}' | code)" "PH-VAL-001"
+send a PUT "$CA" /v1/admin/params '{"precios.descuento_anual_pct":0}' > /dev/null
+check "la gestión no cambia parámetros -> PH-PERM-001" "$(send h PUT "$CH" /v1/admin/params '{"precios.iva_pct":10}' | code)" "PH-PERM-001"
+check "parámetros sin CSRF -> PH-AUTH-003" "$(curl -s -b "$T/a" -X PUT -H "$J" "$B/v1/admin/params" -d '{"precios.iva_pct":21}' | code)" "PH-AUTH-003"
+check "/legal/privacidad en la web" "$(curl -s -o /dev/null -w '%{http_code}' "$WEB/js/views/public/legal.js")" "200"
 
 echo "== Demo comercial y QR del folleto (REQ_QR_DEMO_COMERCIAL)"
 RD=$(curl -s -o /dev/null -D - "$WEB/demo")
@@ -295,6 +342,7 @@ if [ -n "$DP" ]; then
   DE=$(curl -s -b "$T/d1" "$B/v1/employees?per_page=1" | jq_ "d['data'][0]['id']")
   check "demo: dar de baja a un empleado -> PH-DEMO-001" "$(curl -s -b "$T/d1" -X DELETE -H "$J" -H "X-CSRF-Token: $CD" "$B/v1/employees/$DE" -d "{\"fecha_baja\":\"$HOY\",\"motivo_baja\":\"VOLUNTARIA\"}" | code)" "PH-DEMO-001"
   check "demo: alta con email -> PH-DEMO-001" "$(curl -s -b "$T/d1" -H "$J" -H "X-CSRF-Token: $CD" "$B/v1/employees" -d '{"nombre":"Leo","email":"leo@ejemplo.es","puesto":"OTRO","tipo_contrato":"ETT","turno":"TARDE","fecha_alta":"2024-01-15"}' | code)" "PH-DEMO-001"
+  check "demo: exportar la empresa -> PH-DEMO-001" "$(curl -s -b "$T/d1" "$B/v1/company/export" | code)" "PH-DEMO-001"
   check "demo: sí ve el riesgo de su empresa" "$(curl -s -b "$T/d1" "$B/v1/risk?level=ALTO" | jq_ "5 <= d['meta']['total'] <= 8")" "True"
   for i in 1 2 3 4 5; do curl -s -H "$J" -H "$P" "$B/v1/auth/login" -d '{"email":"gerente@pymehub.demo","password":"mala-contrasena"}' > /dev/null; done
   check "5 fallos no bloquean la cuenta demo (DMO-025)" "$(curl -s -H "$J" -H "$P" "$B/v1/auth/login" -d "{\"email\":\"gerente@pymehub.demo\",\"password\":\"$DP\"}" | jq_ "d['data']['usuario']['perfil']")" "GERENTE"

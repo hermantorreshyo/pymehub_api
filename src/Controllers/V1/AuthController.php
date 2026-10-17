@@ -99,7 +99,7 @@ final class AuthController
     {
         $u = Db::one(
             "SELECT u.id, u.perfil, u.es_demo, u.nombre, u.apellidos, u.email, u.privacidad_aceptada_en,
-                    i.id AS i_id, i.tipo AS i_tipo, i.nombre AS i_nombre, i.estado AS i_estado
+                    i.id AS i_id, i.tipo AS i_tipo, i.nombre AS i_nombre, i.estado AS i_estado, i.fecha_baja AS i_fecha_baja
                FROM usuario u JOIN interlocutor i ON i.id = u.interlocutor_id
               WHERE u.id = ?",
             [Session::userId()]
@@ -121,6 +121,8 @@ final class AuthController
                 'tipo'   => $u['i_tipo'],
                 'nombre' => $u['i_nombre'],
                 'estado' => $u['i_estado'],
+                // RF-111: tras la baja, solo lectura hasta el borrado definitivo (LEG-017)
+                'fecha_borrado' => $u['i_estado'] === 'BAJA' ? \PymeHub\Services\BorradoService::fechaBorrado($u['i_fecha_baja']) : null,
             ],
             'plan'       => $s['plan'] ?? null,
             'demo'       => (int) $u['es_demo'] === 1,

@@ -101,46 +101,8 @@ final class DemoService
             "SELECT id FROM usuario WHERE perfil <> 'ADMIN' AND (es_demo = 1"
             . ($ids === [] ? '' : ' OR interlocutor_id IN (' . implode(',', $ids) . ')') . ')'
         ), 'id'));
-        if ($ids === [] && $usuarios === []) {
-            return;
-        }
-        $tablas = Db::all(
-            "SELECT TABLE_NAME AS t,
-                    SUM(COLUMN_NAME = 'interlocutor_id') AS por_interlocutor,
-                    SUM(COLUMN_NAME = 'usuario_id') AS por_usuario
-               FROM information_schema.COLUMNS
-              WHERE TABLE_SCHEMA = DATABASE() AND COLUMN_NAME IN ('interlocutor_id', 'usuario_id')
-              GROUP BY TABLE_NAME"
-        );
-        $pdo = Db::pdo();
-        $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
-        try {
-            // Los inicios de sesión demo (DMO-033) son métricas comerciales: se conservan sin
-            // referencias a las personas que se van a borrar
-            if ($usuarios !== []) {
-                $pdo->exec("UPDATE registro_auditoria SET usuario_id = NULL, interlocutor_id = NULL, entidad_id = NULL
-                             WHERE accion = 'LOGIN_DEMO' AND usuario_id IN (" . implode(',', $usuarios) . ')');
-            }
-            foreach ($tablas as $t) {
-                $tabla = preg_replace('/[^a-z_]/', '', (string) $t['t']);
-                if ((int) $t['por_interlocutor'] > 0 && $ids !== []) {
-                    $pdo->exec("DELETE FROM `$tabla` WHERE interlocutor_id IN (" . implode(',', $ids) . ')');
-                }
-                if ((int) $t['por_usuario'] > 0 && $usuarios !== []) {
-                    $pdo->exec("DELETE FROM `$tabla` WHERE usuario_id IN (" . implode(',', $usuarios) . ')');
-                }
-            }
-            if ($usuarios !== []) {
-                $pdo->exec('DELETE FROM usuario WHERE id IN (' . implode(',', $usuarios) . ')');
-            }
-            if ($ids !== []) {
-                $pdo->exec('DELETE FROM interlocutor WHERE id IN (' . implode(',', $ids) . ')');
-            }
-            // Preguntas de los módulos propios borrados (sin comprobación de claves no se aplica el ON DELETE CASCADE)
-            $pdo->exec('DELETE FROM pregunta_modulo WHERE modulo_id NOT IN (SELECT id FROM modulo_formativo)');
-        } finally {
-            $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
-        }
+        // Los LOGIN_DEMO (DMO-033) se conservan anonimizados: siguen contando en las métricas
+        BorradoService::borrar($ids, $usuarios);
     }
 
     /** Genera todos los datos. Devuelve un resumen para la consola. */
@@ -242,7 +204,7 @@ final class DemoService
         Db::insert(
             'INSERT INTO suscripcion (interlocutor_id, plan, ciclo_cobro, precio_empleado_mes, limite_empleados, fecha_inicio)
              VALUES (?, ?, ?, ?, ?, ?)',
-            [$id, $plan, $ciclo, \PymeHub\Core\Plan::PRECIO[$plan], $limite, Tiempo::dia(-120)]
+            [$id, $plan, $ciclo, \PymeHub\Core\Parametros::precioMes($plan), $limite, Tiempo::dia(-120)]
         );
         return $id;
     }

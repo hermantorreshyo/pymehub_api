@@ -64,7 +64,12 @@ Roles (`usuario.perfil`): `ADMIN` (plataforma, no ve datos de empleados), `GEREN
 | 6 | Asesor de formación con IA: preferencias, Mistral con PayloadGuard, caché, modos, respaldo por reglas, valoración, demanda agregada y uso para la plataforma | Hecho (API 0.5.0, web 0.5.0) |
 | 7 | IA de RR. HH.: motor de riesgo v1.1 con puntuación diaria, ranking, ficha explicada y auditada, alertas de rotación, metodología con fuentes, revisión de sesgos, tendencias, retrospectiva y línea base | Hecho (API 0.6.0, web 0.6.0) |
 | — | Demo comercial y QR del folleto (`docs/requerimientos/REQ_QR_DEMO_COMERCIAL.md`): ruta `/demo`, panel «Pruebe Pyme Hub», usuarios demo con restricciones, reinicio nocturno y métricas sin datos personales | Hecho (API 0.7.0, web 0.7.0) |
-| 8–10 | PWA completa, operación (exportación y baja de empresa, derechos RGPD, mantenimiento desde el panel), cierre y capturas del Anexo D | Pendiente |
+| — | QR de instalación de la app: ruta `/app` → `#/instalar` | Hecho (API 0.7.1, web 0.7.1) |
+| 9 | Operación: exportación ZIP de la empresa, baja y borrado a los 30 días, derechos RGPD (descargar mis datos, supresión), mantenimiento desde el panel con aviso 48 h, resumen de errores 5xx, prueba de restauración | Hecho (API 0.8.0, web 0.8.0) |
+| 9a | Parámetros de la plataforma (titular pendiente de constitución, precios sin IVA, IVA, descuento anual 0 %), textos legales, «+ IVA» en precios, plantilla de contrato de encargo | Hecho (API 0.8.0, web 0.8.0) |
+| 9b–9c | Vigencia de suscripciones (prueba, vigente, en gracia, vencida) y Stripe en modo prueba (Checkout, portal, webhooks, resumen con base + IVA + total) | Pendiente (v0.9.0) |
+| 9d | Marketplace Pyme Hub Skills en modo prueba (Stripe Connect, comisión del 20 %, compra de empresa + IVA y de particular IVA incluido) | Pendiente (v0.10.0) |
+| 10 | Cierre: cabeceras de seguridad (nota A), criterios de aceptación, documentación final, capturas del Anexo D | Pendiente (v1.0.0) |
 
 Defensa del TFM: **lunes 19 de octubre de 2026**.
 
@@ -82,6 +87,8 @@ Defensa del TFM: **lunes 19 de octubre de 2026**.
    - **los comandos de despliegue** (orden: primero la API, después la web; migraciones si las hay).
 
 ## 8. Límites
+
+- Los datos del titular de Pyme Hub no existen todavía (sociedad en constitución): nunca inventarlos; viven en Administración → Parámetros.
 
 - Nunca subir secretos (`config/config.php`, `js/config.js`, `storage/`, `.env`).
 - Nunca enviar datos personales al proveedor de IA ni registrar contraseñas, tokens, check-ins o prompts.

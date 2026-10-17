@@ -13,7 +13,7 @@ final class Plan
         'COMPLETO' => ['bienestar', 'formacion', 'asesor_formacion', 'riesgo_rotacion', 'linea_base'],
     ];
 
-    public const PRECIO = ['ENTRADA' => 15.00, 'COMPLETO' => 29.00];
+    /** Precios por empleado y mes sin IVA: ver Parametros::precioMes() (editables en el panel). */
 
     public static function features(?string $plan): array
     {

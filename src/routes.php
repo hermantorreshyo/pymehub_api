@@ -13,6 +13,8 @@ use PymeHub\Controllers\V1\FormacionController as Formacion;
 use PymeHub\Controllers\V1\HealthController as Health;
 use PymeHub\Controllers\V1\IncidenciaController as Incidencias;
 use PymeHub\Controllers\V1\MiFormacionController as MiFormacion;
+use PymeHub\Controllers\V1\OperacionController as Operacion;
+use PymeHub\Controllers\V1\ParametrosController as Parametros;
 use PymeHub\Controllers\V1\PublicoController as Publico;
 use PymeHub\Controllers\V1\RiesgoController as Riesgo;
 use PymeHub\Controllers\V1\UsuarioController as Usuarios;
@@ -42,6 +44,8 @@ return static function (Router $r): void {
     // Público: demo comercial y métricas del QR (REQ_QR_DEMO_COMERCIAL)
     $r->add('POST', '/v1/public/visits', [Publico::class, 'visit']);
     $r->add('GET',  '/v1/public/demo-status', [Publico::class, 'demoStatus']);
+    $r->add('GET',  '/v1/public/status', [Operacion::class, 'status']);
+    $r->add('GET',  '/v1/public/params', [Parametros::class, 'publicos']);
 
     // Autenticación
     $r->add('POST', '/v1/auth/login', [AuthC::class, 'login']);
@@ -57,6 +61,18 @@ return static function (Router $r): void {
     $r->add('GET',   '/v1/admin/metrics', [Empresas::class, 'metrics'], [$admin]);
     $r->add('GET',   '/v1/admin/ai-usage', [Asesor::class, 'usage'], [$admin]);
     $r->add('GET',   '/v1/admin/campaign-metrics', [Publico::class, 'metrics'], [$admin]);
+    // Operación (fase 9): exportación, mantenimiento y errores
+    $r->add('GET',   '/v1/admin/tenants/{id}/export', [Operacion::class, 'exportTenant'], [$admin]);
+    $r->add('GET',   '/v1/admin/maintenance', [Operacion::class, 'maintenance'], [$admin]);
+    $r->add('PUT',   '/v1/admin/maintenance', [Operacion::class, 'saveMaintenance'], [$admin, $csrf]);
+    $r->add('GET',   '/v1/admin/errors', [Operacion::class, 'errors'], [$admin]);
+    $r->add('GET',   '/v1/admin/params', [Parametros::class, 'index'], [$admin]);
+    $r->add('PUT',   '/v1/admin/params', [Parametros::class, 'update'], [$admin, $csrf]);
+
+    // Portabilidad y derechos RGPD (LEG-017, §8.8)
+    $r->add('GET',  '/v1/company/export', [Operacion::class, 'exportCompany'], [$gerente, $noDemo]);
+    $r->add('GET',  '/v1/me/data-export', [Operacion::class, 'myData'], [$logged, $noDemo]);
+    $r->add('POST', '/v1/employees/{id}/erase', [Operacion::class, 'erase'], [$gerente, $noDemo, $csrf]);
 
     // Cuentas de RR. HH. (solo gerente)
     $r->add('GET',    '/v1/users', [Usuarios::class, 'index'], [$gerente]);
