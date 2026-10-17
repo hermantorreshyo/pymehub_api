@@ -493,7 +493,8 @@ export const config = {
 
 - **Reinicio nocturno** a las 03:30: la línea `demo_seed.php --reset` de `/etc/cron.d/pymehub` (apartado 8). Solo borra y recrea las empresas marcadas con `es_demo = 1`; el administrador y las métricas se conservan.
 - **Antes de cada presentación:** `sudo -u www-data php $API/cli/demo_seed.php --reset`, la prueba de humo con `'PymeHub-Demo'` y escanear el QR con dos móviles.
-- **Métricas:** `admin@pymehub.demo` → Resumen → «QR del folleto» (hoy, 7 días, desde el inicio).
+- **QR de instalación de la app:** `https://pymehub.hermantorres.com/app` → página «Instala Pyme Hub». Comprobación: `curl -sI https://pymehub.hermantorres.com/app` da 302 a `…#/instalar`. Los QR para imprimir están en `pymehub_web/docs/qr/`.
+- **Métricas:** `admin@pymehub.demo` → Resumen → «Códigos QR» (folleto o instalar la app; hoy, 7 días, desde el inicio).
 - **Si hay abuso:** `'habilitada' => false` en `config.php`. La landing muestra «La demostración no está disponible» y las sesiones demo abiertas se cierran.
 
 ---
@@ -502,7 +503,7 @@ export const config = {
 
 ```bash
 curl -s https://api.pymehub.hermantorres.com/v1/health
-#  "estado":"ok", "version":"0.7.0", base_datos ok, copia_seguridad ok
+#  "estado":"ok", "version":"0.7.1", base_datos ok, copia_seguridad ok
 curl -s -o /dev/null -w "%{http_code}\n" https://api.pymehub.hermantorres.com/install            # 404
 curl -s -o /dev/null -w "%{http_code}\n" https://api.pymehub.hermantorres.com/config/config.php  # 404
 
@@ -515,12 +516,12 @@ curl -s -D - -o /dev/null -X OPTIONS https://api.pymehub.hermantorres.com/v1/aut
 curl -sI https://pymehub.hermantorres.com/ | grep -Ei 'content-security|strict-transport'
 ```
 
-**Prueba de humo** (171 comprobaciones con la contraseña de la demo; 164 sin ella). Crea empresas y usuarios de prueba: ejecútala **antes** de cargar la demo. Si no puede iniciar sesión como administrador, se detiene y lo dice (revisa la contraseña; tras 5 intentos, espera 15 minutos).
+**Prueba de humo** (174 comprobaciones con la contraseña de la demo; 167 sin ella). Crea empresas y usuarios de prueba: ejecútala **antes** de cargar la demo. Si no puede iniciar sesión como administrador, se detiene y lo dice (revisa la contraseña; tras 5 intentos, espera 15 minutos).
 
 ```bash
 cd $API
 bash tests/smoke_test.sh https://api.pymehub.hermantorres.com https://pymehub.hermantorres.com TU_EMAIL_ADMIN 'TU_CONTRASEÑA_ADMIN' 'PymeHub-Demo'
-# Resultado: 171 correctas, 0 fallidas
+# Resultado: 174 correctas, 0 fallidas
 ```
 
 **Datos de demostración** (repítelo la víspera de la defensa):
@@ -622,7 +623,7 @@ Si una migración falla, restaura la copia del primer comando y vuelve a la etiq
 - [ ] Instalador completado, `/install` 404, `config.php` 640 y copia fuera del servidor.
 - [ ] `/etc/cron.d/pymehub` con copias, retención, alertas, riesgo diario (03:00) y sesgos trimestrales; primera copia hecha; restauración probada.
 - [ ] `/v1/health` en `ok` con versión 0.5.0 y `copia_seguridad: ok`.
-- [ ] Prueba de humo 171/171 y datos de demo regenerados (y `ai_warmup` si hay clave).
+- [ ] Prueba de humo 174/174 y datos de demo regenerados (y `ai_warmup` si hay clave).
 - [ ] `curl -sI https://pymehub.hermantorres.com/demo` da 302 con `modo=demo`, y el QR impreso abre el panel «Pruebe Pyme Hub» en dos móviles.
 - [ ] Recorrido en navegador sin errores de consola; notas A externas.
 - [ ] Monitor externo activo.

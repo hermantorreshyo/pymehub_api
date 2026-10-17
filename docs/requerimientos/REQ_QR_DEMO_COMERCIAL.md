@@ -265,3 +265,4 @@ Decisiones tomadas con Herman al implementarlo:
 | `DMO-017` | `contactEmail: 'info@hyo.company'` en `public/js/config.js` |
 | `DMO-031` | `dispositivo` es `VARCHAR(10)` con `CHECK` (convención del proyecto) en lugar de `ENUM` |
 | `DMO-033` | Los `LOGIN_DEMO` se conservan al reiniciar la demo (sin referencias a personas). La prueba de humo usa la cabecera `X-PymeHub-Prueba` y la campaña `prueba_interna` para no sumar en las métricas comerciales |
+| Ampliación v0.7.1 | Segundo QR para instalar la app: `/app` → `#/instalar` (botón nativo, pasos en iPhone, aviso en navegadores internos). Campaña de serie `instalar_app`; las instalaciones completadas se cuentan con `medium = instalacion`. La tarjeta del administrador pasa a «Códigos QR». QR imprimibles en `pymehub_web/docs/qr/` |

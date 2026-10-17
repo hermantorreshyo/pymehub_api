@@ -465,14 +465,14 @@ curl -s https://api.pymehub.hermantorres.com/install -o /dev/null -w "%{http_cod
 curl -s https://api.pymehub.hermantorres.com/config/config.php -o /dev/null -w "%{http_code}\n"   # 404
 ```
 
-**Prueba de humo.** `tests/smoke_test.sh` hace 171 comprobaciones (sesión, CSRF, perfiles, aislamiento entre empresas, organización, bienestar, formación, asesor de IA, riesgo de rotación y línea base, demo comercial, CORS, bloqueo por fuerza bruta). Con la contraseña de la demo como quinto argumento comprueba también el login demo, las sesiones concurrentes, `PH-DEMO-001` y el bloqueo por IP; el sexto es la URL de la web para la redirección `/demo`. Si no puede iniciar sesión como administrador se detiene y lo dice, en lugar de dar decenas de fallos. **Crea dos empresas y varios usuarios de prueba**, así que ejecútala en un entorno de pruebas, o en producción solo antes de cargar datos reales y borrando después lo creado:
+**Prueba de humo.** `tests/smoke_test.sh` hace 174 comprobaciones (sesión, CSRF, perfiles, aislamiento entre empresas, organización, bienestar, formación, asesor de IA, riesgo de rotación y línea base, demo comercial, CORS, bloqueo por fuerza bruta). Con la contraseña de la demo como quinto argumento comprueba también el login demo, las sesiones concurrentes, `PH-DEMO-001` y el bloqueo por IP; el sexto es la URL de la web para la redirección `/demo`. Si no puede iniciar sesión como administrador se detiene y lo dice, en lugar de dar decenas de fallos. **Crea dos empresas y varios usuarios de prueba**, así que ejecútala en un entorno de pruebas, o en producción solo antes de cargar datos reales y borrando después lo creado:
 
 ```bash
 cd /var/www/hermantorres/eude/pymehub/pymehub_api
 bash tests/smoke_test.sh https://api.pymehub.hermantorres.com https://pymehub.hermantorres.com TU_EMAIL_ADMIN 'TU_CONTRASEÑA' 'PymeHub-Demo'
 ```
 
-Resultado esperado: `171 correctas, 0 fallidas` (164 sin la contraseña de la demo).
+Resultado esperado: `174 correctas, 0 fallidas` (167 sin la contraseña de la demo).
 
 **Web.** `curl -s -o /dev/null -w '%{http_code}\n' https://pymehub.hermantorres.com/` y `…/js/config.js` deben dar **200**. Un 403 en la raíz y 404 en `config.js` indican que el `DocumentRoot` del vhost no termina en `/public` (apartado 10.2; revisa también el `-le-ssl.conf`).
 
@@ -621,7 +621,7 @@ cd /var/www/hermantorres/eude/pymehub/pymehub_api && sudo -u pymehub git checkou
 - [ ] HTTPS en ambos subdominios, con redirección desde HTTP.
 - [ ] Asistente completado, `/install` devuelve 404, `config.php` con permisos 640 y copia fuera del servidor.
 - [ ] `/v1/health` en `ok`.
-- [ ] Prueba de humo con 171 correctas (`tests/smoke_test.sh`, con la contraseña de la demo).
+- [ ] Prueba de humo con 174 correctas (`tests/smoke_test.sh`, con la contraseña de la demo).
 - [ ] La web responde 200 en `/` y en `js/config.js`, sin errores en la consola.
 - [ ] `/etc/cron.d/pymehub` activo, primera copia hecha (`copia_seguridad: ok`) y restauración probada.
 - [ ] Catálogo de formación con 15 módulos (`php cli/catalog_sync.php`).

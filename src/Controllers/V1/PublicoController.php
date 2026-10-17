@@ -82,9 +82,19 @@ final class PublicoController
         $iniUtc = $desde === null ? '2000-01-01 00:00:00' : $aUtc($desde . ' 00:00:00');
 
         $visitas = Db::all(
-            'SELECT dispositivo, creado_en FROM visita_campania WHERE campania = ? AND creado_en >= ? AND creado_en < ? ORDER BY creado_en',
+            "SELECT dispositivo, creado_en FROM visita_campania
+              WHERE campania = ? AND medio <> 'instalacion' AND creado_en >= ? AND creado_en < ? ORDER BY creado_en",
             [$campania, $iniUtc, $finUtc]
         );
+        // Instalaciones de la app completadas desde la página #/instalar (evento appinstalled)
+        $instalaciones = ['MOVIL' => 0, 'ESCRITORIO' => 0, 'OTRO' => 0];
+        foreach (Db::all(
+            "SELECT dispositivo, COUNT(*) AS n FROM visita_campania
+              WHERE campania = ? AND medio = 'instalacion' AND creado_en >= ? AND creado_en < ? GROUP BY dispositivo",
+            [$campania, $iniUtc, $finUtc]
+        ) as $r) {
+            $instalaciones[$r['dispositivo']] = (int) $r['n'];
+        }
         $porDispositivo = ['MOVIL' => 0, 'ESCRITORIO' => 0, 'OTRO' => 0];
         $porDia = [];
         $porHora = array_fill(0, 24, 0);
@@ -122,6 +132,7 @@ final class PublicoController
             'por_dia'         => $serie,
             'por_hora'        => array_map(static fn ($h, $n) => ['hora' => $h, 'visitas' => $n], array_keys($porHora), $porHora),
             'logins_demo'     => ['total' => array_sum($logins), 'por_perfil' => $logins],
+            'instalaciones'   => ['total' => array_sum($instalaciones), 'por_dispositivo' => $instalaciones],
             'primera_visita'  => $iso($visitas[0]['creado_en'] ?? null),
             'ultima_visita'   => $iso($visitas === [] ? null : $visitas[count($visitas) - 1]['creado_en']),
         ], 200, [

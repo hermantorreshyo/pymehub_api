@@ -13,12 +13,15 @@ namespace PymeHub\Core;
  *       'password'         => 'PymeHub-Demo',// contraseña pública de los usuarios demo (DMO-023)
  *       'password_admin'   => '…',           // admin@pymehub.demo, solo pruebas internas (DMO-028)
  *   ],
- *   'campaigns' => ['folleto_comercial'],    // campañas admitidas en POST /v1/public/visits (DMO-030)
+ *   'campaigns' => ['feria_2027'],           // campañas adicionales a las de serie (CAMPANIAS_BASE)
  */
 final class Demo
 {
     /** Campaña reservada para las pruebas automáticas: no ensucia las métricas comerciales. */
     public const CAMPANIA_PRUEBA = 'prueba_interna';
+
+    /** Campañas que vienen con el código (QR del folleto y QR de instalación de la app). */
+    public const CAMPANIAS_BASE = ['folleto_comercial', 'instalar_app'];
 
     /** Fallos de login admitidos por IP en 15 minutos para cuentas demo (DMO-025). */
     public const MAX_INTENTOS_IP = 20;
@@ -47,9 +50,9 @@ final class Demo
     /** @return list<string> campañas admitidas (más la de pruebas) */
     public static function campanias(): array
     {
-        $c = Config::get('campaigns', ['folleto_comercial']);
+        $c = Config::get('campaigns', []);
         $c = is_array($c) ? array_values(array_filter($c, 'is_string')) : [];
-        return array_values(array_unique([...$c, self::CAMPANIA_PRUEBA]));
+        return array_values(array_unique([...self::CAMPANIAS_BASE, ...$c, self::CAMPANIA_PRUEBA]));
     }
 
     /** ¿La persona de la sesión es un usuario de la demostración? */

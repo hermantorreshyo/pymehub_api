@@ -280,6 +280,9 @@ check "visita de campaña -> 204 (DMO-030)" "$(curl -s -o /dev/null -w '%{http_c
 check "campaña no admitida -> PH-VAL-001" "$(curl -s -H "$J" "$B/v1/public/visits" -d '{"campaign":"otra","source":"qr","medium":"folleto"}' | code)" "PH-VAL-001"
 check "campo no declarado -> PH-VAL-001" "$(curl -s -H "$J" "$B/v1/public/visits" -d '{"campaign":"prueba_interna","source":"qr","medium":"folleto","ip":"1.2.3.4"}' | code)" "PH-VAL-001"
 check "métricas del QR para la plataforma (DMO-035)" "$(curl -s -b "$T/a" "$B/v1/admin/campaign-metrics?campaign=prueba_interna" | jq_ "d['data']['visitas'] >= 1 and d['data']['por_dispositivo']['MOVIL'] >= 1 and len(d['data']['por_hora']) == 24")" "True"
+check "/app -> 302 a la página de instalación" "$(curl -s -o /dev/null -D - "$WEB/app" | grep -i '^location:' | grep -c 'utm_campaign=instalar_app#/instalar')" "1"
+check "instalación de la app -> 204" "$(curl -s -o /dev/null -w '%{http_code}' -H "$J" -A 'Mozilla/5.0 (Linux; Android 15)' "$B/v1/public/visits" -d '{"campaign":"prueba_interna","source":"web","medium":"instalacion"}')" "204"
+check "las instalaciones se cuentan aparte de las visitas" "$(curl -s -b "$T/a" "$B/v1/admin/campaign-metrics?campaign=prueba_interna" | jq_ "d['data']['instalaciones']['total'] >= 1 and d['data']['instalaciones']['por_dispositivo']['MOVIL'] >= 1")" "True"
 check "la gestión no ve las métricas -> PH-PERM-001" "$(curl -s -b "$T/h" "$B/v1/admin/campaign-metrics" | code)" "PH-PERM-001"
 if [ -n "$DP" ]; then
   P='X-PymeHub-Prueba: 1'

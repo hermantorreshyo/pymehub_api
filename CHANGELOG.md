@@ -2,6 +2,18 @@
 
 Formato basado en *Keep a Changelog*; versiones SemVer.
 
+## [0.7.1] · 2026-10-17
+
+**QR de instalación de la app.** Sin migraciones ni cambios en `config.php`.
+
+### Endpoints
+- `POST /v1/public/visits`: la campaña `instalar_app` es de serie, como `folleto_comercial` (`Demo::CAMPANIAS_BASE`). `config.php → campaigns` solo añade campañas adicionales. Con `medium = instalacion` se registra una instalación completada.
+- `GET /v1/admin/campaign-metrics`: nuevo bloque `instalaciones` (total y por dispositivo). Las instalaciones ya no cuentan como visitas.
+
+### Pruebas y documentación
+- Prueba de humo: **174 comprobaciones**, que incluyen la redirección `/app` y el recuento de instalaciones aparte; correctas en MariaDB 11.8.3 y MySQL.
+- OpenAPI 0.7.1, requisitos v0.9.6, manuales 01 y 02, y nota en `REQ_QR_DEMO_COMERCIAL.md`.
+
 ## [0.7.0] · 2026-10-13
 
 **Demo comercial y QR del folleto** (`docs/requerimientos/REQ_QR_DEMO_COMERCIAL.md`). Una sola instalación: la demo se separa de la operativa con `es_demo` dentro de la misma base de datos. **Migración nueva: `0007_demo_comercial`.**

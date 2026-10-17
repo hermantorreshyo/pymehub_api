@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Pyme Hub API
-  version: 0.7.0
+  version: 0.7.1
   description: |
     Contrato entre pymehub_api y pymehub_web (DEC-13).
     Autenticación por cookie de sesión HttpOnly. Toda petición que modifica datos
@@ -1338,7 +1338,7 @@ paths:
   /v1/public/visits:
     post:
       summary: Visita de una campaña comercial (público · DMO-030)
-      description: Sin sesión ni CSRF. Cuenta visitas, no visitantes. No guarda IP, User-Agent completo ni identificadores; el dispositivo (MOVIL, ESCRITORIO, OTRO) se deriva del User-Agent en el servidor. Campañas admitidas en config.php (`campaigns`) más `prueba_interna` para las pruebas automáticas. Límite de 30 peticiones por minuto e IP.
+      description: Sin sesión ni CSRF. Cuenta visitas, no visitantes. No guarda IP, User-Agent completo ni identificadores; el dispositivo (MOVIL, ESCRITORIO, OTRO) se deriva del User-Agent en el servidor. Campañas de serie: `folleto_comercial` (QR /demo) e `instalar_app` (QR /app); más las de config.php (`campaigns`) y `prueba_interna` para las pruebas automáticas. Con `medium = instalacion` se registra una instalación de la app completada (evento appinstalled). Límite de 30 peticiones por minuto e IP.
       security: []
       requestBody:
         content:
@@ -1371,7 +1371,7 @@ paths:
         - { name: from, in: query, schema: { type: string, format: date } }
         - { name: to, in: query, schema: { type: string, format: date } }
       responses:
-        '200': { description: 'data = { campania, visitas, por_dispositivo: { MOVIL, ESCRITORIO, OTRO }, por_dia[{ fecha, visitas }], por_hora[{ hora, visitas }], logins_demo: { total, por_perfil: { GERENTE, RRHH, EMPLEADO } }, primera_visita, ultima_visita }; meta = { desde, hasta, zona, campanias, demo: { habilitada } }' }
+        '200': { description: 'data = { campania, visitas, por_dispositivo: { MOVIL, ESCRITORIO, OTRO }, por_dia[{ fecha, visitas }], por_hora[{ hora, visitas }], logins_demo: { total, por_perfil: { GERENTE, RRHH, EMPLEADO } }, instalaciones: { total, por_dispositivo } (filas con medium = instalacion, que no cuentan como visitas), primera_visita, ultima_visita }; meta = { desde, hasta, zona, campanias, demo: { habilitada } }' }
         '403': { description: PH-PERM-001 }
   /v1/alerts:
     get:

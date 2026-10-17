@@ -2,7 +2,7 @@
 
 **Proyecto:** Pyme Hub — TFM EUDE Business School (The Best Team)
 **Documento:** Especificación de requerimientos técnicos del Producto Mínimo Viable (MVP)
-**Versión:** 0.9.5 · 13/10/2026
+**Versión:** 0.9.6 · 17/10/2026
 **Stack:** LAMP nativo, sin Docker (Linux · Apache · **MariaDB 11.8 LTS o MySQL 8.4 LTS** · PHP 8.4). Producción: MariaDB 11.8
 **Repositorios:** dos, independientes: `pymehub_api` (backend tipo API) y `pymehub_web` (frontend que consume la API)
 **Estado:** Alineado con la versión 4 del documento del TFM (carpeta *Revisión 004*). Los cambios que este documento obliga a trasladar al TFM se listan en §22.3.
@@ -25,6 +25,7 @@
 | 0.9.2 | 12/10/2026 | Fase 5 (Upskilling): §8.5 con el seguimiento (`GET /v1/training/assignments`), la retirada de asignaciones y el resumen (`GET /v1/training/summary`); §10 con el detalle de `RF-041` a `RF-047` (estado `VENCIDA` calculado, idempotencia del cuestionario sin conexión, reglas de `RF-043` sin datos individuales de bienestar) |
 | 0.9.4 | 12/10/2026 | Fase 7 (IA de RR. HH.): §8.4 con `GET /v1/risk/bias` y `GET/PUT /v1/baseline`; §9.6 con la implementación (puntuación diaria, alerta solo al pasar a alto, recálculo limitado, retrospectiva, línea base homogénea en ausencias injustificadas, cron de sesgos) |
 | 0.9.5 | 13/10/2026 | Demo comercial y QR del folleto (`docs/requerimientos/REQ_QR_DEMO_COMERCIAL.md`, `DMO-*`): §18.1 con la ruta `/demo`, usuarios demo con restricciones, reinicio nocturno y métricas; `PH-DEMO-001` y `PH-DEMO-002` en §16 |
+| 0.9.6 | 17/10/2026 | QR de instalación de la app: ruta estable `/app` → página `#/instalar` (§13.7, §18.1) |
 
 ---
 
@@ -959,6 +960,12 @@ Requerimiento completo en `docs/requerimientos/REQ_QR_DEMO_COMERCIAL.md` (`DMO-0
 - **Landing en modo demo:** franja comercial y panel «Pruebe Pyme Hub» con los usuarios de la empresa de ejemplo. «Entrar como …» abre el login de siempre con el correo ya escrito.
 - **Separación de la operativa:** misma instalación y misma base de datos. Las empresas y personas de la demo llevan `es_demo = 1` (migración `0007`); el reinicio nocturno (03:30) solo regenera lo marcado.
 - **Usuarios demo:** contraseña pública `demo.password` y restricciones `PH-DEMO-001`. El bloqueo es por IP, con 20 fallos en 15 minutos, y se admiten sesiones concurrentes. El interruptor `demo.habilitada` responde `PH-DEMO-002` sin desplegar.
+- **QR de instalación (v0.7.1):** `https://pymehub.hermantorres.com/app` responde 302 a la página «Instala Pyme Hub» (`#/instalar`), que se adapta al navegador:
+  - botón nativo de instalación donde se emite `beforeinstallprompt` (Chrome, Edge o Samsung Internet en Android y escritorio);
+  - en iPhone y iPad, los pasos de «Añadir a pantalla de inicio»;
+  - si se abre dentro de otra app, un aviso para pasar al navegador;
+  - si ya está instalada, «Abrir Pyme Hub».
+  Las visitas (campaña `instalar_app`) y las instalaciones completadas (evento `appinstalled`) se cuentan aparte.
 - **Métricas sin datos personales:** visitas de campaña sin cookies, IP ni User-Agent (`POST /v1/public/visits`, tabla `visita_campania`), inicios de sesión `LOGIN_DEMO` en la auditoría, y la tarjeta «QR del folleto» del administrador (`GET /v1/admin/campaign-metrics`).
 
 ## 19. Requerimientos no funcionales adicionales
