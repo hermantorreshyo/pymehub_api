@@ -2,7 +2,20 @@
 
 Formato basado en *Keep a Changelog*; versiones SemVer.
 
-## [0.8.1] · 2026-10-17
+## [0.8.2] · 2026-10-17
+
+**Prueba de restauración con root protegido por contraseña.** Sin migraciones ni cambios en `config.php`.
+
+### Operación
+- `cli/restore_test.sh` (`RNF-064`) ya no da `1045 Access denied for user 'root'@'localhost' (using password: NO)` cuando root tiene contraseña, como en este VPS:
+  - si root no entra por socket, pide la contraseña una vez y sin eco;
+  - la guarda solo en un archivo temporal 600 (`--defaults-file`), que se borra al terminar;
+  - `PH_DB_ADMIN=usuario` permite usar otro administrador;
+  - sin terminal, termina con un mensaje claro.
+- Probado en MariaDB 11.8 con contraseña correcta, errónea y sin terminal.
+- Manuales 01 y 02 actualizados.
+
+ · 2026-10-17
 
 **Corrección de la copia de seguridad.** Sin migraciones ni cambios en `config.php`.
 

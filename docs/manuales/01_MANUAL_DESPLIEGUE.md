@@ -525,7 +525,7 @@ sudo bash /var/www/hermantorres/eude/pymehub/pymehub_api/cli/restore_test.sh    
 ls -1t /var/www/hermantorres/eude/pymehub/pymehub_api/storage/logs/restauracion-*.md | head -1
 ```
 
-Con MySQL u otro socket: `sudo PH_DB_OPTS="--socket=/ruta/mysqld.sock" bash …/cli/restore_test.sh`.
+Si root entra por socket sin contraseña (Debian por defecto), no pregunta nada; si tiene contraseña, la pide una vez sin eco y la borra al terminar. Otro administrador: `sudo PH_DB_ADMIN=usuario bash …/cli/restore_test.sh`. Con MySQL u otro socket: `sudo PH_DB_OPTS="--socket=/ruta/mysqld.sock" bash …/cli/restore_test.sh`.
 
 Copia también `storage/backups/` fuera del servidor periódicamente (por ejemplo, con `rsync` a tu equipo).
 

@@ -4,19 +4,35 @@
 # 1. Crea una base temporal, 2. restaura en ella la última copia, 3. compara el número de filas
 # de cada tabla con la base en uso, 4. borra la base temporal y 5. guarda el informe en
 # storage/logs/restauracion-AAAAMMDD-HHMMSS.md. No toca la base de producción.
-# Usa el cliente con autenticación de root por socket (Debian), sin contraseñas en la línea de órdenes.
+# Necesita un usuario administrador de la base (crea y borra una base temporal):
+# - root por socket sin contraseña (Debian por defecto): no pregunta nada;
+# - root con contraseña (como en el VPS srv1616185): la pide una vez, sin eco, y la guarda solo en
+#   un archivo temporal 600 que se borra al terminar. Nunca va en la línea de órdenes.
+# - Otro administrador: PH_DB_ADMIN=usuario bash cli/restore_test.sh
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CLI="$(command -v mariadb || command -v mysql)"
 # Opciones extra del cliente, p. ej. PH_DB_OPTS="--socket=/ruta/mysqld.sock" (por defecto, el socket del sistema)
 OPTS="${PH_DB_OPTS:-}"
+ADMCNF=""
+limpiar_cnf() { [ -n "$ADMCNF" ] && rm -f "$ADMCNF"; return 0; }
+if ! "$CLI" $OPTS -e "SELECT 1" >/dev/null 2>&1 || [ -n "${PH_DB_ADMIN:-}" ]; then
+  USR="${PH_DB_ADMIN:-root}"
+  [ -t 0 ] || { echo "Sin acceso a la base como $USR: ejecútalo en una terminal para introducir la contraseña." >&2; exit 1; }
+  read -r -s -p "Contraseña de $USR en la base de datos: " PASS; echo
+  ADMCNF="$(mktemp)"; chmod 600 "$ADMCNF"
+  PH_U="$USR" PH_P="$PASS" php -r '$q = static fn ($v) => "\"" . addcslashes((string) $v, "\\\"") . "\""; file_put_contents($argv[1], "[client]\nuser=" . $q(getenv("PH_U")) . "\npassword=" . $q(getenv("PH_P")) . "\n");' "$ADMCNF"
+  unset PASS
+  OPTS="--defaults-file=$ADMCNF $OPTS"
+  "$CLI" $OPTS -e "SELECT 1" >/dev/null || { limpiar_cnf; echo "No se pudo conectar como $USR." >&2; exit 1; }
+fi
 DB="$(php -r '$c = require $argv[1]; echo $c["db"]["name"];' "$ROOT/config/config.php")"
 COPIA="$(ls -1t "$ROOT"/storage/backups/db-*.sql.gz 2>/dev/null | head -1 || true)"
 [ -n "$COPIA" ] || { echo "No hay copias en storage/backups: ejecuta antes cli/backup.sh" >&2; exit 1; }
 TMP="pymehub_restore_$(date +%s)"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 INFORME="$ROOT/storage/logs/restauracion-$STAMP.md"
-trap '"$CLI" $OPTS -e "DROP DATABASE IF EXISTS \`$TMP\`" >/dev/null 2>&1 || true' EXIT
+trap '"$CLI" $OPTS -e "DROP DATABASE IF EXISTS \`$TMP\`" >/dev/null 2>&1 || true; limpiar_cnf' EXIT
 
 INI=$(date +%s)
 "$CLI" $OPTS -e "CREATE DATABASE \`$TMP\` CHARACTER SET utf8mb4"
