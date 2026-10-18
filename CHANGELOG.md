@@ -2,6 +2,22 @@
 
 Formato basado en *Keep a Changelog*; versiones SemVer.
 
+## [0.11.1] · 2026-10-18
+
+**Corrección: el reinicio nocturno de la demo se detenía.** Sin migraciones ni cambios de configuración obligatorios.
+
+### Operación
+- `cli/demo_seed.php`:
+  - una `demo.password_admin` no válida en `config.php` (vacía, el valor de ejemplo «CAMBIAR» o con menos de 10 caracteres) ya no detiene la demo; solo deja `admin@pymehub.demo` sin cambios y avisa;
+  - en producción, el valor de ejemplo hacía fallar el reinicio de las 03:30 cada noche, de modo que la demo no se regeneraba y `formador@` no existía. Lo detectó el diagnóstico;
+  - con `--password-admin` explícito se sigue exigiendo el mínimo de 10 caracteres.
+- La API quita la cabecera `X-Powered-By`, que revelaba la versión de PHP.
+
+### Diagnóstico
+- La versión de la web se compara por versión mayor y menor: un parche puede afectar a un solo repositorio, como este.
+- Contraseña de `admin@pymehub.demo`: distingue «sin definir», «valor de ejemplo» y «cuenta inexistente».
+- La versión de Apache en la cabecera `Server` pasa a ser informativa: se oculta con `ServerTokens Prod`, que es configuración global del VPS y queda fuera del proyecto (`RNF-001`).
+
 ## [0.11.0] · 2026-10-18
 
 **Diagnóstico del despliegue** (`RNF-068`). Sin migraciones, sin cambios en `config.php` y sin tareas programadas nuevas.

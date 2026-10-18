@@ -125,9 +125,11 @@ final class DiagnosticoService
         if ($sw === null || $sw['status'] !== 200) {
             $this->add('AVISO', 'Versión de la web', 'No se ha podido leer ' . self::web() . '/sw.js desde el servidor.', 'Comprueba que la web responde y que app.frontend_url de config.php es correcta.');
         } elseif (preg_match("/VERSION\\s*=\\s*'v([\\d.]+)'/", $sw['cuerpo'], $m)) {
-            $m[1] === PH_VERSION
-                ? $this->add('OK', 'Versión de la web', 'v' . $m[1] . ', igual que la API.')
-                : $this->add('AVISO', 'Versión de la web', "La web está en v{$m[1]} y la API en v" . PH_VERSION . '.', 'Despliega en la web la misma etiqueta que en la API: git checkout v' . PH_VERSION);
+            // Mismas versión mayor y menor: un parche (x.y.Z) puede tocar solo uno de los dos repositorios
+            $mm = static fn (string $v) => implode('.', array_slice(explode('.', $v), 0, 2));
+            $mm($m[1]) === $mm(PH_VERSION)
+                ? $this->add('OK', 'Versión de la web', 'v' . $m[1] . ', compatible con la API v' . PH_VERSION . '.')
+                : $this->add('AVISO', 'Versión de la web', "La web está en v{$m[1]} y la API en v" . PH_VERSION . '.', 'Despliega en la web la versión que corresponde a la API (mismo x.y; consulta el CHANGELOG de la web).');
         }
     }
 
@@ -239,9 +241,15 @@ final class DiagnosticoService
             ? $this->add('OK', 'CORS', 'La web está entre los orígenes permitidos.')
             : $this->add('ERROR', 'CORS', 'La URL de la web no está en cors.allowed_origins.', 'Añádela en config.php.');
         $pa = (string) Config::get('demo.password_admin', '');
-        in_array($pa, ['', 'CAMBIAR'], true)
-            ? $this->add('AVISO', 'Contraseña de admin@pymehub.demo', 'Sin definir: la cuenta de pruebas internas no se crea.', 'Define demo.password_admin en config.php y reinicia la demo.')
-            : $this->add('OK', 'Contraseña de admin@pymehub.demo', 'Definida (no se muestra).');
+        $existe = Db::value("SELECT 1 FROM usuario WHERE email = ? AND perfil = 'ADMIN' AND estado_acceso = 'ACTIVO'", ['admin@' . DemoService::DOMINIO]) !== null;
+        if ($pa === '' || $pa === 'CAMBIAR' || mb_strlen($pa) < 10) {
+            $this->add('AVISO', 'Contraseña de admin@pymehub.demo', ($pa === '' ? 'Sin definir' : 'Es el valor de ejemplo o tiene menos de 10 caracteres')
+                . ($existe ? ': la cuenta existe, pero no se actualiza.' : ': la cuenta de pruebas internas no se crea.'),
+                'Define demo.password_admin (mínimo 10 caracteres) en config.php y ejecuta: sudo -u www-data php $API/cli/demo_seed.php --reset');
+        } else {
+            $this->add($existe ? 'OK' : 'AVISO', 'Contraseña de admin@pymehub.demo', $existe ? 'Definida (no se muestra) y la cuenta existe.' : 'Definida, pero la cuenta todavía no existe.',
+                $existe ? null : 'sudo -u www-data php $API/cli/demo_seed.php --reset');
+        }
         if (!$red) {
             return;
         }
@@ -256,8 +264,11 @@ final class DiagnosticoService
             $faltan === []
                 ? $this->add('OK', "Cabeceras de seguridad · $q", 'Todas presentes: ' . implode(', ', $deben) . '.')
                 : $this->add('AVISO', "Cabeceras de seguridad · $q", 'Faltan: ' . implode(', ', $faltan) . '.', 'Revisa el host virtual y .htaccess (fase 10, nota A).');
-            if (isset($s['cabeceras']['x-powered-by']) || preg_match('/\d/', $s['cabeceras']['server'] ?? '')) {
-                $this->add('AVISO', "Huella del servidor · $q", 'Las cabeceras Server o X-Powered-By muestran versiones.', 'ServerTokens Prod y expose_php = Off (configuración del servidor).');
+            if (isset($s['cabeceras']['x-powered-by'])) {
+                $this->add('AVISO', "Huella del servidor · $q", 'La cabecera X-Powered-By muestra la versión de PHP.', "Desde la v0.11.1 la API la quita; en la web: Header always unset X-Powered-By (.htaccess).");
+            } elseif (preg_match('/\d/', $s['cabeceras']['server'] ?? '')) {
+                $this->add('INFO', "Huella del servidor · $q", 'La cabecera Server muestra la versión de Apache.',
+                    'Se oculta con «ServerTokens Prod» en la configuración global de Apache, que es del administrador del VPS y queda fuera del proyecto (RNF-001).');
             }
         }
     }

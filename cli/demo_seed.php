@@ -43,10 +43,21 @@ if (mb_strlen($password) < 10) {
     fwrite(STDERR, "Falta la contraseña de la demo (mínimo 10 caracteres): añade 'demo' => ['password' => …] en config/config.php o usa --password.\n");
     exit(1);
 }
-$passwordAdmin = $opts['password-admin'] ?? Demo::passwordAdmin();
-if ($passwordAdmin !== null && mb_strlen((string) $passwordAdmin) < 10) {
-    fwrite(STDERR, "La contraseña del administrador demo debe tener al menos 10 caracteres.\n");
-    exit(1);
+// La contraseña de admin@pymehub.demo es opcional: un valor no válido en config.php (vacío, el de
+// ejemplo «CAMBIAR» o menos de 10 caracteres) NO detiene la demo, solo deja esa cuenta sin cambios.
+// Así el reinicio nocturno nunca falla por ella. Pasada a mano (--password-admin), sí se exige.
+if (isset($opts['password-admin'])) {
+    $passwordAdmin = (string) $opts['password-admin'];
+    if (mb_strlen($passwordAdmin) < 10) {
+        fwrite(STDERR, "La contraseña del administrador demo debe tener al menos 10 caracteres.\n");
+        exit(1);
+    }
+} else {
+    $passwordAdmin = Demo::passwordAdmin();
+    if ($passwordAdmin !== null && (mb_strlen($passwordAdmin) < 10 || $passwordAdmin === 'CAMBIAR')) {
+        fwrite(STDERR, "Aviso: demo.password_admin de config.php no es válida (mínimo 10 caracteres): admin@" . DemoService::DOMINIO . " queda sin cambios. La demo se genera igualmente.\n");
+        $passwordAdmin = null;
+    }
 }
 if (DemoService::existe()) {
     if (!isset($opts['reset'])) {
@@ -68,7 +79,7 @@ echo "Bajas de los últimos 12 meses: {$r['bajas']}\n";
 echo "Riesgo de rotación (Castilla): {$r['riesgo']['alto']} en nivel alto, {$r['riesgo']['medio']} en medio, {$r['riesgo']['alertas']} alertas, {$r['riesgo']['puntuaciones']} puntuaciones históricas\n";
 echo "Usuarios demo: gerente@, rrhh@, conductor@, gerente2@ y formador@ (Pyme Hub Skills), dominio " . DemoService::DOMINIO . "\n";
 echo $passwordAdmin === null
-    ? "admin@" . DemoService::DOMINIO . ": sin cambios (no hay demo.password_admin en config.php)\n"
+    ? "admin@" . DemoService::DOMINIO . ": sin cambios (demo.password_admin sin definir o no válida en config.php)\n"
     : "admin@" . DemoService::DOMINIO . ": contraseña de demo.password_admin\n";
 echo 'Demostración ' . (Demo::habilitada() ? 'habilitada' : 'DESACTIVADA (demo.habilitada)') . "\n";
 echo "Asesor con IA: si hay clave de Mistral en config.php, pregenera las respuestas con php cli/ai_warmup.php\n";

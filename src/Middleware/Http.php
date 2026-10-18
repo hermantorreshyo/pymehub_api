@@ -14,6 +14,7 @@ final class Http
     /** Devuelve true si la petición era un preflight ya respondido. */
     public static function apply(Request $request): bool
     {
+        header_remove('X-Powered-By'); // no revelar la versión de PHP (expose_php es configuración global)
         header('X-Content-Type-Options: nosniff');
         header('Referrer-Policy: strict-origin-when-cross-origin');
         header("Content-Security-Policy: default-src 'none'; frame-ancestors 'none'");
