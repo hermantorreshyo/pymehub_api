@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Pyme Hub API
-  version: 0.10.0
+  version: 0.11.0
   description: |
     Contrato entre pymehub_api y pymehub_web (DEC-13).
     Autenticación por cookie de sesión HttpOnly. Toda petición que modifica datos
@@ -1759,3 +1759,12 @@ paths:
       summary: Ventas del marketplace, comisiones y liquidaciones a formadores (ADMIN)
       security: [{ sesion: [] }]
       responses: { '200': { description: 'data[] como /v1/skills/sales con formador; meta = { total, totales, stripe }' } }
+  /v1/admin/diagnostics:
+    get:
+      summary: Diagnóstico del despliegue (ADMIN), solo lectura y sin secretos
+      description: 'Comprueba versión y migraciones, versión de la web, PHP y extensiones, motor de base de datos, disco, permisos, instalador bloqueado, copias y prueba de restauración, tareas programadas (/etc/cron.d/pymehub), HTTPS, cookie segura, clave de cifrado, CORS, cabeceras de seguridad de API y web, mantenimiento, errores 5xx de 24 h, demo (usuarios, reinicio nocturno, /demo y /app), parámetros y textos legales, Stripe (modo, webhook, conexión, eventos, Connect), asesor con IA y datos. Mismo informe que cli/diagnostico.php. Límite de 20 por hora.'
+      security: [{ sesion: [] }]
+      parameters: [{ name: red, in: query, schema: { type: string, enum: ['0', '1'], default: '1' }, description: '0 = sin comprobaciones de red' }]
+      responses:
+        '200': { description: 'data = { estado: OK|AVISO|ERROR, version, generado_en, resumen: { OK, AVISO, ERROR, INFO }, comprobaciones[{ grupo, nombre, estado: OK|AVISO|ERROR|INFO, detalle, accion }] }' }
+        '403': { description: PH-PERM-001 }

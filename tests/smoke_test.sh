@@ -427,6 +427,12 @@ else
   check "compra sin pasarela o sin cuenta del formador: controlado" "$(send g POST "$CG" /v1/skills/purchases "{\"modulo_id\":$SK,\"acepta_condiciones\":true}" | jq_ "'controlado' if d.get('error',{}).get('code') in ('PH-PAY-001','PH-SKL-002') else json.dumps(d)[:120]")" "controlado"
 fi
 
+echo "== Diagnóstico del despliegue"
+curl -s -b "$T/a" "$B/v1/admin/diagnostics" > "$T/dg.json"
+check "la plataforma lanza el diagnóstico (grupos y resumen)" "$(jq_ "str(d['data']['estado'] in ('OK','AVISO','ERROR'))+' '+str(len(d['data']['comprobaciones']) >= 30)+' '+str(any(c['nombre']=='Migraciones de la base de datos' and c['estado']=='OK' for c in d['data']['comprobaciones']))" < "$T/dg.json")" "True True True"
+check "el diagnóstico no contiene secretos" "$(grep -cE 'sk_test_[A-Za-z0-9]{6,}|whsec_[A-Za-z0-9]{6,}|password|Dev#Pass|BASE64' "$T/dg.json")" "0"
+check "la gestión no lanza el diagnóstico -> PH-PERM-001" "$(curl -s -b "$T/g" "$B/v1/admin/diagnostics" | code)" "PH-PERM-001"
+
 echo "== Demo comercial y QR del folleto (REQ_QR_DEMO_COMERCIAL)"
 RD=$(curl -s -o /dev/null -D - "$WEB/demo")
 check "/demo -> 302 a la landing en modo demo (DMO-001)" "$(printf '%s' "$RD" | head -1 | awk '{print $2}') $(printf '%s' "$RD" | grep -ic '^location:.*modo=demo')" "302 1"

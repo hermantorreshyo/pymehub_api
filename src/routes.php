@@ -74,6 +74,7 @@ return static function (Router $r): void {
     $r->add('GET',   '/v1/admin/maintenance', [Operacion::class, 'maintenance'], [$admin]);
     $r->add('PUT',   '/v1/admin/maintenance', [Operacion::class, 'saveMaintenance'], [$admin, $csrf]);
     $r->add('GET',   '/v1/admin/errors', [Operacion::class, 'errors'], [$admin]);
+    $r->add('GET',   '/v1/admin/diagnostics', [Operacion::class, 'diagnostics'], [$admin]);
     $r->add('GET',   '/v1/admin/params', [Parametros::class, 'index'], [$admin]);
     $r->add('PUT',   '/v1/admin/params', [Parametros::class, 'update'], [$admin, $csrf]);
     // Pyme Hub Skills (fase 9d): formadores, revisión de cursos y ventas

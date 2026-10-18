@@ -624,10 +624,11 @@ Si una migración falla, restaura la copia del primer comando y vuelve a la etiq
 - [ ] `config.js` de la web creado.
 - [ ] Instalador completado, `/install` 404, `config.php` 640 y copia fuera del servidor.
 - [ ] `/etc/cron.d/pymehub` con copias, retención, alertas, riesgo diario (03:00), vigencia de suscripciones (00:15), borrado de empresas de baja (04:30) y sesgos trimestrales; primera copia hecha; `bash $API/cli/restore_test.sh` correcto (pide la contraseña de root de MariaDB) (informe en `storage/logs/restauracion-*.md`).
-- [ ] `/v1/health` en `ok` con versión 0.10.0 y `copia_seguridad: ok`.
-- [ ] Prueba de humo 251/251 y datos de demo regenerados (y `ai_warmup` si hay clave).
+- [ ] `/v1/health` en `ok` con versión 0.11.0 y `copia_seguridad: ok`.
+- [ ] Prueba de humo 254/254 y datos de demo regenerados (y `ai_warmup` si hay clave).
 - [ ] `curl -sI https://pymehub.hermantorres.com/demo` da 302 con `modo=demo`, y el QR impreso abre el panel «Pruebe Pyme Hub» en dos móviles.
 - [ ] Recorrido en navegador sin errores de consola; notas A externas.
 - [ ] Monitor externo activo.
+- [ ] Diagnóstico sin errores: Administración → Diagnóstico, o `sudo -u www-data php $API/cli/diagnostico.php --solo-problemas` (manual 04).
 - [ ] Administración → Parámetros revisado: titular pendiente de constitución, precios 15 / 29 € sin IVA, IVA 21 %, descuento anual 0 %. Textos legales visibles en `#/legal/privacidad`.
 - [ ] Stripe en modo prueba configurado (manual 03): webhook con eventos en 200, portal guardado y un pago de prueba con la tarjeta 4242 visible en Administración → Pagos.

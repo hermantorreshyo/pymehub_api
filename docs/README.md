@@ -13,6 +13,7 @@
 | [`manuales/02_DESPLIEGUE_VPS_PRODUCCION.md`](manuales/02_DESPLIEGUE_VPS_PRODUCCION.md) | Despliegue y actualización en el VPS de producción (`srv1616185`) sobre su MariaDB 11.8 compartido, activación del asesor de IA y problemas reales de la instalación |
 | [`legal/CONTRATO_ENCARGO_TRATAMIENTO.md`](legal/CONTRATO_ENCARGO_TRATAMIENTO.md) | Plantilla del contrato de encargo del tratamiento (art. 28 RGPD, `LEG-016`, `LEG-021`), pendiente de la constitución de la sociedad y de revisión jurídica. Los textos legales públicos están en `pymehub_web` (`#/legal/…`) |
 | [`manuales/03_STRIPE_MODO_PRUEBA.md`](manuales/03_STRIPE_MODO_PRUEBA.md) | Pagos con Stripe en modo prueba: claves con `cli/stripe_setup.php`, webhook, portal del cliente, tarea diaria y prueba de extremo a extremo (`RF-114` a `RF-120`) |
+| [`manuales/04_DIAGNOSTICO.md`](manuales/04_DIAGNOSTICO.md) | Diagnóstico del despliegue: pantalla para personas no técnicas (Administración → Diagnóstico) y `cli/diagnostico.php` para la terminal (`RNF-068`) |
 | [`ejemplos/plantilla_empleados.csv`](ejemplos/plantilla_empleados.csv) | Plantilla para la importación CSV de empleados |
 | [`anexos/`](anexos/) | Documento final del TFM, anexo del prototipo de interfaz y presupuesto (Anexo A) |
 

@@ -156,6 +156,14 @@ final class OperacionController
      * Solo código, ruta, veces e identificador de correlación: el detalle (que podría contener
      * datos) se consulta en el servidor con ese identificador.
      */
+    /** GET /v1/admin/diagnostics (ADMIN): diagnóstico completo del despliegue, sin secretos. */
+    public static function diagnostics(Request $request): void
+    {
+        $q = Validator::validate($request->query, ['red' => 'nullable|in:0,1']);
+        \PymeHub\Core\RateLimiter::hit('diagnostico:' . \PymeHub\Core\Context::usuarioId(), 20, 3600);
+        Response::json(\PymeHub\Services\DiagnosticoService::ejecutar(($q['red'] ?? '1') === '1'));
+    }
+
     public static function errors(Request $request): void
     {
         $q = Validator::validate($request->query, ['hours' => 'nullable|int|min:1|max:168']);

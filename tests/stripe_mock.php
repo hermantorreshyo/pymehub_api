@@ -81,6 +81,8 @@ switch (true) {
         $s['subscription_simulada'] = $sub;
         $estado['sesiones'][] = $s;
         $salir(200, $s);
+    case $metodo === 'GET' && $ruta === '/v1/balance':
+        $salir(200, ['object' => 'balance', 'livemode' => false, 'available' => [['amount' => 0, 'currency' => 'eur']]]);
     case $metodo === 'POST' && $ruta === '/v1/accounts':
         $a = ['id' => $id('acct'), 'object' => 'account', 'type' => $p['type'] ?? null, 'email' => $p['email'] ?? null,
             'charges_enabled' => false, 'payouts_enabled' => false, 'requirements' => ['currently_due' => ['external_account', 'individual.id_number']]];

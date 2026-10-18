@@ -2,7 +2,7 @@
 
 **Proyecto:** Pyme Hub — TFM EUDE Business School (The Best Team)
 **Documento:** Especificación de requerimientos técnicos del Producto Mínimo Viable (MVP)
-**Versión:** 0.9.9 · 18/10/2026
+**Versión:** 0.9.10 · 18/10/2026
 **Stack:** LAMP nativo, sin Docker (Linux · Apache · **MariaDB 11.8 LTS o MySQL 8.4 LTS** · PHP 8.4). Producción: MariaDB 11.8
 **Repositorios:** dos, independientes: `pymehub_api` (backend tipo API) y `pymehub_web` (frontend que consume la API)
 **Estado:** Alineado con la versión 4 del documento del TFM (carpeta *Revisión 004*). Los cambios que este documento obliga a trasladar al TFM se listan en §22.3.
@@ -29,6 +29,7 @@
 | 0.9.7 | 17/10/2026 | Fases 9 y 9a (v0.8.0): implementación de `RF-110`, `RF-111`, `RNF-062`, `RNF-063`, `RNF-064` y `LEG-007`/`LEG-017` (§17.5); nuevos `LEG-018` a `LEG-022` (textos legales, titular parametrizado, IVA y precios, contrato de encargo, versión aceptada) y `RF-112`/`RF-113` (parámetros de la plataforma, derecho de acceso del propio usuario) en §15 y §17.4 |
 | 0.9.8 | 17/10/2026 | Fases 9b y 9c (v0.9.0): vigencia de la suscripción (`RF-114` a `RF-116`) y pagos con Stripe en modo prueba (`RF-117` a `RF-120`); `PH-PLAN-002` y `PH-PAY-001` a `PH-PAY-005` en §16; tarea `cli/subscription_status.php` en §17.2; implementación en §17.6 |
 | 0.9.9 | 18/10/2026 | Fase 9d (v0.10.0): marketplace Pyme Hub Skills en modo prueba (`RF-121` a `RF-128`), `PH-SKL-002` y `PH-SKL-003` en §16, implementación y alcance diferido en §17.7 |
+| 0.9.10 | 18/10/2026 | Diagnóstico del despliegue (v0.11.0): `RNF-068` en §17.4 |
 
 ---
 
@@ -951,6 +952,7 @@ Coincidencia visual general con el mockup; funciona en escritorio, tableta y mó
 | `RNF-063` | M | **Modo mantenimiento**: un indicador activado desde el panel o por archivo hace que la API responda `PH-SYS-003` y la app muestre un aviso; los mantenimientos programados se anuncian con un aviso visible desde 48 h antes |
 | `RNF-064` | M | **Copias**: diarias, con rotación de 14 y una prueba de restauración documentada antes de la defensa |
 | `RNF-065` | S | Las actualizaciones de seguridad del sistema operativo son responsabilidad del administrador del VPS y quedan fuera del proyecto, que no modifica la configuración global (`RNF-001`) |
+| `RNF-068` | M | **Diagnóstico del despliegue**: Administración → Diagnóstico (`GET /v1/admin/diagnostics`) y `cli/diagnostico.php` comprueban, sin cambiar nada y sin mostrar secretos, versión, migraciones, servidor, copias y restauración, tareas programadas, seguridad (HTTPS, cookie, cabeceras), operación, demo, parámetros, Stripe, IA y datos. Cada punto: Correcto, Revisar, Falla o Informativo, con «qué hacer». Lo puede lanzar cualquier cuenta de plataforma sin conocimientos técnicos |
 | `RF-110` | M | **Exportación completa de una empresa**: archivo ZIP con CSV/JSON de empleados, equipos, incidencias, formación y agregados de bienestar (sin notas cifradas), generado por el administrador al solicitar la baja |
 | `RF-111` | M | **Baja de una empresa**: estado `baja`, acceso de solo lectura para gerente y RR. HH. hasta el borrado definitivo (`LEG-017`) |
 | `RF-112` | M | **Parámetros de la plataforma** (tabla `parametro`), editables por el administrador sin desplegar: titular, precios sin IVA, IVA, descuento del pago anual (0 % hasta que se acuerde), días de prueba y de gracia, días hasta el borrado tras la baja, comisión y exención de IVA de Skills y versión de los textos legales. Validados por tipo y límites; cambios auditados |

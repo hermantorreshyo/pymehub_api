@@ -2,6 +2,34 @@
 
 Formato basado en *Keep a Changelog*; versiones SemVer.
 
+## [0.11.0] · 2026-10-18
+
+**Diagnóstico del despliegue** (`RNF-068`). Sin migraciones, sin cambios en `config.php` y sin tareas programadas nuevas.
+
+### Operación
+- `Services/DiagnosticoService`: más de 40 comprobaciones de solo lectura, sin secretos, cada una con estado (OK, AVISO, ERROR o INFO) y «qué hacer». Comprueba:
+  - versión y migraciones, y que la web esté en la misma versión;
+  - servidor: PHP, extensiones, base de datos, disco, permisos e instalador;
+  - copias y prueba de restauración;
+  - las ocho tareas programadas y su ejecución;
+  - seguridad: HTTPS, cookie, clave de cifrado, CORS y cabeceras de API y web;
+  - operación;
+  - demo: usuarios, reinicio, `/demo` y `/app`;
+  - parámetros y textos legales;
+  - Stripe;
+  - asesor con IA;
+  - datos.
+- `GET /v1/admin/diagnostics` (ADMIN, 20 por hora).
+- `cli/diagnostico.php [--solo-problemas] [--sin-red]`, que sale con código 1 si hay errores.
+
+### Pruebas y documentación
+- Prueba de humo, sin fallos:
+  - 276 comprobaciones con el simulador de Stripe (MariaDB 11.8.3);
+  - 254 sin Stripe (MySQL).
+- Incluye una comprobación de que el informe no contiene secretos.
+- Manual nuevo **04 · Diagnóstico**, para personas no técnicas y para la terminal.
+- OpenAPI 0.11.0, Postman (carpeta 21), requisitos v0.9.10 y listas de comprobación de los manuales 01 y 02.
+
 ## [0.10.0] · 2026-10-18
 
 **Marketplace Pyme Hub Skills en modo prueba (fase 9d).**

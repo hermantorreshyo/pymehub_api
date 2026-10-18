@@ -465,7 +465,7 @@ curl -s https://api.pymehub.hermantorres.com/install -o /dev/null -w "%{http_cod
 curl -s https://api.pymehub.hermantorres.com/config/config.php -o /dev/null -w "%{http_code}\n"   # 404
 ```
 
-**Prueba de humo.** `tests/smoke_test.sh` hace 251 comprobaciones (273 con el simulador de Stripe) (sesión, CSRF, perfiles, aislamiento entre empresas, organización, bienestar, formación, asesor de IA, riesgo de rotación y línea base, exportación y derechos RGPD, baja de empresa, mantenimiento, parámetros e IVA, demo comercial, CORS, bloqueo por fuerza bruta). Activa el mantenimiento unos segundos y cambia el descuento anual a 10 % y lo devuelve a 0 %. Con la contraseña de la demo como quinto argumento comprueba también el login demo, las sesiones concurrentes, `PH-DEMO-001` y el bloqueo por IP; el sexto es la URL de la web para la redirección `/demo`. Si no puede iniciar sesión como administrador se detiene y lo dice, en lugar de dar decenas de fallos. **Crea dos empresas y varios usuarios de prueba**, así que ejecútala en un entorno de pruebas, o en producción solo antes de cargar datos reales y borrando después lo creado:
+**Prueba de humo.** `tests/smoke_test.sh` hace 254 comprobaciones (276 con el simulador de Stripe) (sesión, CSRF, perfiles, aislamiento entre empresas, organización, bienestar, formación, asesor de IA, riesgo de rotación y línea base, exportación y derechos RGPD, baja de empresa, mantenimiento, parámetros e IVA, demo comercial, CORS, bloqueo por fuerza bruta). Activa el mantenimiento unos segundos y cambia el descuento anual a 10 % y lo devuelve a 0 %. Con la contraseña de la demo como quinto argumento comprueba también el login demo, las sesiones concurrentes, `PH-DEMO-001` y el bloqueo por IP; el sexto es la URL de la web para la redirección `/demo`. Si no puede iniciar sesión como administrador se detiene y lo dice, en lugar de dar decenas de fallos. **Crea dos empresas y varios usuarios de prueba**, así que ejecútala en un entorno de pruebas, o en producción solo antes de cargar datos reales y borrando después lo creado:
 
 ```bash
 cd /var/www/hermantorres/eude/pymehub/pymehub_api
@@ -644,6 +644,8 @@ Simular el borrado de empresas sin borrar nada: `sudo -u www-data php $API/cli/t
 
 ## 18. Lista de comprobación final
 
+- [ ] Diagnóstico sin errores: Administración → Diagnóstico, o `sudo -u www-data php $API/cli/diagnostico.php --solo-problemas` (manual 04).
+
 - [ ] Motor de base de datos verificado (apartado 4): MariaDB ≥ 11.4.5 (producción: 11.8) o MySQL ≥ 8.4.
 - [ ] Base `pymehub` y usuario `pymehub_user` con permisos solo sobre ella.
 - [ ] DNS de ambos subdominios resolviendo a la IP del VPS.
@@ -652,7 +654,7 @@ Simular el borrado de empresas sin borrar nada: `sudo -u www-data php $API/cli/t
 - [ ] HTTPS en ambos subdominios, con redirección desde HTTP.
 - [ ] Asistente completado, `/install` devuelve 404, `config.php` con permisos 640 y copia fuera del servidor.
 - [ ] `/v1/health` en `ok`.
-- [ ] Prueba de humo con 251 correctas (`tests/smoke_test.sh`, con la contraseña de la demo).
+- [ ] Prueba de humo con 254 correctas (`tests/smoke_test.sh`, con la contraseña de la demo).
 - [ ] La web responde 200 en `/` y en `js/config.js`, sin errores en la consola.
 - [ ] `/etc/cron.d/pymehub` activo, primera copia hecha (`copia_seguridad: ok`) y restauración probada.
 - [ ] Catálogo de formación con 15 módulos (`php cli/catalog_sync.php`).
