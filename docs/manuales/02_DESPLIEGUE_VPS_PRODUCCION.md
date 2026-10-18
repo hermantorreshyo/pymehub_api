@@ -570,6 +570,7 @@ sudo -u www-data touch $API/storage/maintenance.flag
 
 cd $API && git config core.fileMode false && git fetch --tags origin && git checkout $V
 sudo chown -R root:www-data $API && sudo chmod 2770 $API/storage $API/config && sudo chmod 750 $API/cli/backup.sh
+sudo find $API/storage -mindepth 1 ! -user www-data -exec chown www-data:www-data {} +   # storage/ sigue siendo de www-data
 sudo -u www-data php $API/cli/migrate.php        # migraciones pendientes y catálogo de formación
 
 sudo rm $API/storage/maintenance.flag
@@ -579,6 +580,7 @@ cd $WEB && git config core.fileMode false && git fetch --tags origin && git chec
 sudo chown -R root:www-data $WEB
 ```
 
+- **El `chown -R` alcanza también `storage/`.** Sus archivos (sesiones, registros, copias y caché) son de `www-data` con permiso 600; si pasan a `root`, Apache ya no los abre. Por eso va siempre seguido de la línea `find … -exec chown www-data:www-data`. Desde la v0.11.2, una sesión ilegible ya no da error 500: el usuario vuelve a entrar. El diagnóstico lo comprueba en «Propietario de los archivos de storage».
 - **Nunca `git push` desde el servidor**: producción solo descarga (el 403 de GitHub es lo esperado).
 - Si `git checkout` dice *Your local changes … would be overwritten*, son cambios de permisos o restos de un zip: `git checkout -- <archivo>` (o `git reset --hard HEAD`; `config.php`, `config.js` y `storage/` no se tocan porque git los ignora) y repite.
 - Los navegadores cogen la web nueva al recargar dos veces (service worker).
@@ -598,6 +600,7 @@ Si una migración falla, restaura la copia del primer comando y vuelve a la etiq
 | 404 de Apache en `/v1/health` | `DocumentRoot` sin `/public`, `mod_rewrite` inactivo o `AllowOverride` distinto de `All` | Paso 5 |
 | 403 en todo el sitio | Carpetas padre sin `x` para www-data | `namei -l`, paso 2 |
 | La web muestra "No se pudo conectar" | Falta `public/js/config.js` o CSP bloquea la API | Paso 6; revisa la consola |
+| Log con `session_start(): open(…/storage/sessions/…) failed: Permission denied` (hasta la v0.11.1, error 500 en `/v1/auth/me`) | Un `chown -R root:…` cambió el propietario de los archivos de `storage/` | `sudo find $API/storage -mindepth 1 ! -user www-data -exec chown www-data:www-data {} +` |
 | La sesión no se mantiene | URL del frontend con barra final o `cookie_secure` falso | Corrige `config/config.php` |
 | `/v1/health` con `copia_seguridad: sin_datos` o `antigua` | Nunca se ha hecho una copia o el cron no se ejecuta | Copia manual (8), `systemctl is-active cron`, `cat /etc/cron.d/pymehub`, `storage/logs/backup.log` |
 | `backup.sh`: *Permission denied* o *command not found* | www-data no puede leer el script o perdió el permiso de ejecución | `chown root:www-data`, `chmod 750` y lánzalo con `bash` |

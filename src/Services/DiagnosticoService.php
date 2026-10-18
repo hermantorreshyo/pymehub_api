@@ -162,6 +162,7 @@ final class DiagnosticoService
         $noEscribibles === []
             ? $this->add('OK', 'Permisos de storage', 'La API puede escribir en logs, copias y subidas.')
             : $this->add('ERROR', 'Permisos de storage', 'Sin permiso de escritura: ' . implode(', ', $noEscribibles) . '.', 'chown -R www-data:www-data $API/storage');
+        $this->archivosDeStorage();
         is_file(PH_ROOT . '/storage/installed.lock')
             ? $this->add('OK', 'Asistente de instalación', 'Bloqueado (installed.lock): /install no responde.')
             : $this->add('ERROR', 'Asistente de instalación', '/install está disponible: cualquiera podría reinstalar.', 'Completa la instalación o crea storage/installed.lock.');
@@ -171,6 +172,43 @@ final class DiagnosticoService
                 ? $this->add('OK', 'Permisos de config.php', sprintf('%o: no lo puede leer cualquier usuario del servidor.', $perm & 0o777))
                 : $this->add('AVISO', 'Permisos de config.php', sprintf('%o: lo puede leer cualquier usuario del servidor.', $perm & 0o777), 'chmod 640 $API/config/config.php');
         }
+    }
+
+    /**
+     * Archivos de storage/ que la API ya no puede escribir (p. ej., tras un `chown -R root:…` en un
+     * despliegue): sesiones que dan error, copias que no actualizan su marca, registros que no se escriben.
+     */
+    private function archivosDeStorage(): void
+    {
+        $versionados = ['.htaccess', 'README.md', 'installed.lock'];
+        $malos = [];
+        $total = 0;
+        foreach (['sessions', 'logs', 'backups', 'ai_cache', 'uploads'] as $sub) {
+            $dir = PH_ROOT . '/storage/' . $sub;
+            if (!is_dir($dir)) {
+                continue;
+            }
+            $it = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS));
+            foreach ($it as $f) {
+                if (++$total > 20000) {
+                    break 2;
+                }
+                if (in_array($f->getFilename(), $versionados, true)) {
+                    continue;
+                }
+                if (!is_writable($f->getPathname())) {
+                    $malos[$sub] = ($malos[$sub] ?? 0) + 1;
+                }
+            }
+        }
+        if ($malos === []) {
+            $this->add('OK', 'Propietario de los archivos de storage', 'La API puede leer y escribir todos sus archivos (sesiones, registros, copias y caché).');
+            return;
+        }
+        $lista = implode(', ', array_map(static fn ($k, $v) => "$k ($v)", array_keys($malos), $malos));
+        $this->add(isset($malos['backups']) ? 'ERROR' : 'AVISO', 'Propietario de los archivos de storage',
+            "Hay archivos que la API no puede escribir: $lista. Suele pasar tras un chown -R del despliegue; las sesiones afectadas obligan a entrar de nuevo y las copias pueden fallar.",
+            'find $API/storage -mindepth 1 ! -user www-data -exec chown www-data:www-data {} +');
     }
 
     private function copias(): void

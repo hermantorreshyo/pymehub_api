@@ -2,6 +2,25 @@
 
 Formato basado en *Keep a Changelog*; versiones SemVer.
 
+## [0.11.2] · 2026-10-18
+
+**Corrección: error 500 con una sesión ilegible.** Sin migraciones ni cambios de configuración.
+
+### Núcleo
+- `Core/Session`: si el archivo de la sesión de la cookie no se puede leer (propietario cambiado en un despliegue o contenido corrupto), se descarta y se abre una sesión nueva. El usuario vuelve a entrar, como con una sesión caducada (`RF-003`), en vez de recibir un 500 en `/v1/auth/me`.
+- El aviso que queda en el registro solo dice el motivo («Permission denied (13)»); ya no incluye la ruta del archivo, que contenía el identificador de sesión.
+
+### Operación
+- Diagnóstico: nueva comprobación «Propietario de los archivos de storage». Señala los archivos de sesiones, registros, copias, caché y subidas que la API no puede escribir, y da el comando que lo arregla. Es un fallo si afecta a las copias; si no, un aviso.
+- Causa en producción: el `chown -R root:www-data $API` de los despliegues alcanzaba `storage/`.
+
+### Pruebas
+- `tests/sesion_ilegible_test.php`: abre una sesión con un archivo corrupto y comprueba que se crea una nueva sin error (con el código anterior, falla). Prueba de humo: 276 correctas con el simulador de Stripe (MariaDB 11.8) y 254 sin Stripe (MySQL).
+
+### Documentación
+- Manual 02: tras el `chown -R` de cada actualización se devuelve `storage/` a `www-data`; también entra en la tabla de problemas frecuentes.
+- Manual 04: la nueva comprobación.
+
 ## [0.11.1] · 2026-10-18
 
 **Corrección: el reinicio nocturno de la demo se detenía.** Sin migraciones ni cambios de configuración obligatorios.

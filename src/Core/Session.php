@@ -35,7 +35,36 @@ final class Session
             'httponly' => true,
             'samesite' => 'Strict',
         ]);
+        if (self::abrir()) {
+            return;
+        }
+        // La sesión de la cookie existe pero no se puede leer (p. ej., el archivo cambió de propietario
+        // en un despliegue). Se trata como caducada: sesión nueva y el usuario vuelve a entrar,
+        // en vez de un 500 (RF-003). Nunca se registra el identificador de sesión.
+        Logger::warn('Sesión ilegible: se descarta y se inicia una nueva', ['motivo' => self::$ultimoError]);
+        unset($_COOKIE[session_name()]);
+        session_id(session_create_id() ?: bin2hex(random_bytes(16)));
         session_start();
+    }
+
+    private static string $ultimoError = '';
+
+    /** Intenta abrir la sesión de la cookie; false si el archivo no se puede leer. */
+    private static function abrir(): bool
+    {
+        try {
+            if (session_start()) {
+                return true;
+            }
+            self::$ultimoError = 'session_start() devolvió false';
+        } catch (\ErrorException $e) {
+            // Solo el motivo, sin la ruta (contiene el identificador de sesión).
+            self::$ultimoError = preg_match('/failed: (.+)$/', $e->getMessage(), $m) ? $m[1] : 'error de lectura';
+        }
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_abort();
+        }
+        return false;
     }
 
     /** Inicia sesión autenticada: regenera ID y token CSRF (RF-002). */

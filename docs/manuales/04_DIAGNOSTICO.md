@@ -1,6 +1,6 @@
 # Manual 04 · Diagnóstico del despliegue
 
-**Versión:** API 0.11.0 · 18/10/2026 · Requisito `RNF-068`.
+**Versión:** API 0.11.2 · 18/10/2026 · Requisito `RNF-068`.
 
 El diagnóstico comprueba que Pyme Hub está completo y sano después de un despliegue o cuando algo no va bien. **Solo mira: no cambia nada**, y nunca muestra contraseñas ni claves.
 
@@ -51,7 +51,7 @@ sudo -u www-data php $API/cli/diagnostico.php --sin-red           # sin comproba
 | Grupo | Comprobaciones |
 |---|---|
 | Versión y código | Versión de la API; migraciones aplicadas frente a las del código; que la web esté en la misma versión (lee `sw.js`) |
-| Servidor | PHP 8.4 y extensiones; curl; motor y versión de la base de datos; espacio en disco; permisos de `storage`; instalador bloqueado; permisos de `config.php` |
+| Servidor | PHP 8.4 y extensiones; curl; motor y versión de la base de datos; espacio en disco; permisos de `storage` y propietario de sus archivos; instalador bloqueado; permisos de `config.php` |
 | Copias de seguridad | Antigüedad de la última copia; copias guardadas; último informe de `restore_test.sh` y su resultado |
 | Tareas programadas | Que `/etc/cron.d/pymehub` tenga las ocho tareas (con la línea exacta si falta alguna) y que se estén ejecutando |
 | Seguridad | `production`; HTTPS; cookie segura; clave de cifrado; CORS; contraseña de la cuenta de pruebas; cabeceras de seguridad de la API y de la web; huella del servidor |
