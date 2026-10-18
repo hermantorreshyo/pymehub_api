@@ -66,7 +66,7 @@ echo "Formación asignada o en curso: {$r['formacion']}\n";
 echo "Preferencias para el asesor: {$r['preferencias']}\n";
 echo "Bajas de los últimos 12 meses: {$r['bajas']}\n";
 echo "Riesgo de rotación (Castilla): {$r['riesgo']['alto']} en nivel alto, {$r['riesgo']['medio']} en medio, {$r['riesgo']['alertas']} alertas, {$r['riesgo']['puntuaciones']} puntuaciones históricas\n";
-echo "Usuarios demo: gerente@, rrhh@, conductor@ y gerente2@ (dominio " . DemoService::DOMINIO . ")\n";
+echo "Usuarios demo: gerente@, rrhh@, conductor@, gerente2@ y formador@ (Pyme Hub Skills), dominio " . DemoService::DOMINIO . "\n";
 echo $passwordAdmin === null
     ? "admin@" . DemoService::DOMINIO . ": sin cambios (no hay demo.password_admin en config.php)\n"
     : "admin@" . DemoService::DOMINIO . ": contraseña de demo.password_admin\n";

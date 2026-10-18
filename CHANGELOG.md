@@ -2,6 +2,57 @@
 
 Formato basado en *Keep a Changelog*; versiones SemVer.
 
+## [0.10.0] · 2026-10-18
+
+**Marketplace Pyme Hub Skills en modo prueba (fase 9d).**
+- **Migración nueva:** `0010_skills`.
+- **Configuración:** sin cambios en `config.php` (usa el mismo bloque `stripe`).
+- **Tareas programadas:** ninguna nueva.
+
+### Base de datos
+- `0010_skills`:
+  - tablas `curso_skills` (precios y revisión) y `compra_skills` (empresa o persona, con base, IVA, total, comisión e importe del formador);
+  - `interlocutor.stripe_cuenta_id` y `stripe_cuenta_lista`.
+- Probada en MariaDB 11.8.3 y MySQL.
+
+### Núcleo
+- `SkillsService`:
+  - importes: empresa + IVA y persona con IVA incluido;
+  - comisión parametrizada sobre la base y exención de IVA parametrizada;
+  - catálogo, ficha del formador, revisión y compras con Stripe Checkout (cargo con destino);
+  - inscripción automática en la compra personal;
+  - ventas y alta en Stripe Connect Express.
+- `ModuloRepository`: la empresa ve los cursos con licencia y la persona los que compró; `propio` pasa a significar «del interlocutor que consulta» y aparece el nuevo indicador `skills`.
+- `PagoService`:
+  - tax rate inclusivo para consumidores;
+  - webhooks `checkout.session.completed` y `expired` de las compras de Skills, y `account.updated`.
+- Los cursos del formador reutilizan los endpoints del editor de módulos.
+
+### Endpoints
+- `GET /v1/skills/catalog`.
+- `GET` y `POST /v1/skills/purchases`.
+- `/v1/skills/my-courses` (listado, alta, ficha, edición, publicación, `listing` y `submit`).
+- `GET /v1/skills/sales`.
+- `GET` y `POST /v1/skills/connect`.
+- `GET` y `POST /v1/admin/trainers`.
+- `/v1/admin/skills/courses` (listado, detalle y `review`).
+- `GET /v1/admin/skills/sales`.
+- Errores nuevos: `PH-SKL-002` y `PH-SKL-003`.
+
+### Demo
+- `formador@pymehub.demo` (Formación Vial Meseta): tres cursos, dos a la venta y uno en revisión.
+- La licencia de Castilla y la compra personal del conductor, ambas ficticias.
+- Comprar y activar el cobro están bloqueados.
+- El reinicio de la demo también borra el formador demo.
+
+### Pruebas y documentación
+- Prueba de humo en MariaDB 11.8.3 y MySQL, sin fallos:
+  - 273 comprobaciones con el simulador de Stripe en los dos motores (Connect y pagos únicos);
+  - 251 en MySQL sin Stripe.
+- OpenAPI 0.10.0, Postman (carpeta 20).
+- Requisitos v0.9.9 (`RF-121` a `RF-128`, §16, §17.7 con el alcance diferido) y `MODELO_DATOS`.
+- Manual 03 con Stripe Connect; manuales 01 y 02 y prompt maestro actualizados.
+
 ## [0.9.0] · 2026-10-17
 
 **Vigencia de suscripciones (fase 9b) y pagos con Stripe en modo prueba (fase 9c).**

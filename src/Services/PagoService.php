@@ -111,19 +111,22 @@ final class PagoService
         return (string) $p['url'];
     }
 
-    /** Tax rate de Stripe con el IVA vigente (exclusivo, España); se crea una vez por porcentaje. */
-    private static function tasaIva(): string
+    /**
+     * Tax rate de Stripe con el IVA vigente (España); se crea una vez por porcentaje y tipo.
+     * Exclusivo: precio sin IVA (empresas). Inclusivo: precio con IVA incluido (consumidores, Skills).
+     */
+    public static function tasaIva(bool $inclusiva = false): string
     {
         $pct = Parametros::iva();
-        $clave = 'stripe.tax_rate.' . str_replace('.', '_', (string) $pct);
+        $clave = 'stripe.tax_rate' . ($inclusiva ? '_incl.' : '.') . str_replace('.', '_', (string) $pct);
         $id = Parametros::get($clave);
         if (is_string($id) && $id !== '') {
             return $id;
         }
         $t = Stripe::api('POST', '/v1/tax_rates', [
             'display_name' => 'IVA', 'description' => 'IVA España ' . $pct . ' %', 'percentage' => $pct,
-            'inclusive' => 'false', 'country' => 'ES', 'jurisdiction' => 'ES', 'tax_type' => 'vat',
-        ], 'pymehub-iva-' . $pct);
+            'inclusive' => $inclusiva ? 'true' : 'false', 'country' => 'ES', 'jurisdiction' => 'ES', 'tax_type' => 'vat',
+        ], 'pymehub-iva-' . ($inclusiva ? 'incl-' : '') . $pct);
         Db::run('INSERT INTO parametro (clave, valor) VALUES (?, ?) ON DUPLICATE KEY UPDATE valor = ?',
             [$clave, $j = json_encode((string) $t['id']), $j]);
         return (string) $t['id'];
@@ -148,7 +151,12 @@ final class PagoService
         }
         try {
             $resultado = Db::transaction(static fn (): string => match ($tipo) {
-                'checkout.session.completed'    => self::checkoutCompletado($obj),
+                'checkout.session.completed'    => isset($obj['metadata']['compra_skills_id'])
+                    ? SkillsService::compraPagada($obj) : self::checkoutCompletado($obj),
+                'checkout.session.expired'      => isset($obj['metadata']['compra_skills_id'])
+                    ? (Db::run("UPDATE compra_skills SET estado = 'FALLIDA' WHERE id = ? AND estado = 'PENDIENTE'", [(int) $obj['metadata']['compra_skills_id']]) > 0 ? 'ok' : 'ignorado')
+                    : 'ignorado',
+                'account.updated'               => SkillsService::cuentaActualizada($obj),
                 'invoice.paid'                  => self::factura($obj, 'PAGADO'),
                 'invoice.payment_failed'        => self::factura($obj, 'FALLIDO'),
                 'customer.subscription.updated',

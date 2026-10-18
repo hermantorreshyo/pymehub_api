@@ -372,6 +372,61 @@ else
   check "Checkout: pago online desactivado o URL de Stripe" "$(send t POST "$CT" /v1/billing/checkout '{"plan":"ENTRADA","ciclo":"MENSUAL","acepta_terminos":true}' | jq_ "'controlado' if d.get('error',{}).get('code') == 'PH-PAY-001' or str(d.get('data',{}).get('url','')).startswith('https://checkout.stripe.com') else json.dumps(d)[:120]")" "controlado"
 fi
 
+echo "== Pyme Hub Skills (fase 9d)"
+# Una persona empleada nueva (la del bienestar ya se suprimió en las pruebas RGPD)
+EID2=$(send g POST "$CG" /v1/employees '{"nombre":"Sara","apellidos":"Skills","puesto":"REPARTIDOR","tipo_contrato":"INDEFINIDO","turno":"MANANA","fecha_alta":"2025-02-01"}' | jq_ "d['data']['id']")
+TOKE2=$(send g POST "$CG" "/v1/employees/$EID2/invitation" "{\"email\":\"emp2$R@prueba.test\"}" | jq_ "d['data']['enlace'].split('/')[-1]")
+curl -s -H "$J" "$B/v1/auth/invitations/accept" -d "{\"token\":\"$TOKE2\",\"password\":\"Empleado#Seguro2\",\"acepta_privacidad\":true}" > /dev/null
+curl -s -c "$T/e2" -H "$J" "$B/v1/auth/login" -d "{\"email\":\"emp2$R@prueba.test\",\"password\":\"Empleado#Seguro2\"}" > "$T/e2l.json"
+CE2=$(jq_ "d['data']['csrf_token']" < "$T/e2l.json")
+NIF3="B$(printf '%08d' $(((R+13) % 100000000)))"
+send a POST "$CA" /v1/admin/trainers "{\"nombre\":\"Formación Prueba $R\",\"nif\":\"$NIF3\",\"formador\":{\"nombre\":\"Marta\",\"apellidos\":\"Prueba\",\"email\":\"formador$R@prueba.test\"}}" > "$T/fo.json"
+check "la plataforma da de alta un formador con invitación" "$(jq_ "str(d['data']['invitacion']['enlace'] is not None)" < "$T/fo.json")" "True"
+TOKF=$(jq_ "d['data']['invitacion']['enlace'].split('/')[-1]" < "$T/fo.json")
+curl -s -H "$J" "$B/v1/auth/invitations/accept" -d "{\"token\":\"$TOKF\",\"password\":\"Formador#Seguro1\",\"acepta_privacidad\":true}" > /dev/null
+curl -s -c "$T/f" -H "$J" "$B/v1/auth/login" -d "{\"email\":\"formador$R@prueba.test\",\"password\":\"Formador#Seguro1\"}" > "$T/fl.json"
+CF=$(jq_ "d['data']['csrf_token']" < "$T/fl.json")
+check "login formador sin plan ni funcionalidades de empresa" "$(jq_ "d['data']['usuario']['perfil']+' '+str(d['data']['features'])" < "$T/fl.json")" "FORMADOR []"
+check "el formador no entra en la gestión de empresas -> PH-PERM-001" "$(curl -s -b "$T/f" "$B/v1/teams" | code) $(curl -s -b "$T/f" "$B/v1/skills/catalog" | code)" "PH-PERM-001 PH-PERM-001"
+check "la gestión no entra en el panel del formador -> PH-PERM-001" "$(curl -s -b "$T/g" "$B/v1/skills/my-courses" | code)" "PH-PERM-001"
+send f POST "$CF" /v1/skills/my-courses '{"titulo":"Carga segura de la furgoneta","resumen":"Cómo repartir el peso y sujetar la carga antes de salir a ruta","categoria":"ALMACEN","duracion_min":6,"puestos_destino":["CONDUCTOR","REPARTIDOR"],"etiquetas":["carga"],"contenido":{"objetivos":["Repartir el peso"],"bloques":[{"tipo":"texto","titulo":"Peso","texto":"Lo pesado abajo y delante."}]},"preguntas":[{"enunciado":"¿Dónde va lo pesado?","opciones":["Arriba","Abajo"],"correcta":1},{"enunciado":"¿Se sujeta la carga?","opciones":["Sí","No"],"correcta":0}]}' > "$T/sk.json"
+SK=$(jq_ "d['data']['id']" < "$T/sk.json")
+check "el formador crea un curso con el editor de módulos" "$(jq_ "str(d['data']['propio'])+' '+str(d['data']['skills'])" < "$T/sk.json")" "True True"
+check "enviar a revisión sin publicar ni precios -> PH-VAL-001" "$(send f POST "$CF" "/v1/skills/my-courses/$SK/submit" '{}' | jq_ "d['error']['code']+' '+str(sorted(d['error']['details'].keys()))")" "PH-VAL-001 ['modulo', 'precios']"
+check "precios: empresa sin IVA y persona con IVA incluido" "$(send f PUT "$CF" "/v1/skills/my-courses/$SK/listing" '{"precio_empresa":100,"precio_persona":12.1}' | jq_ "' '.join(str(x) for x in (d['data']['ficha']['importes']['EMPRESA']['total'], d['data']['ficha']['importes']['PERSONA']['base'], d['data']['ficha']['importes']['EMPRESA']['importe_formador']))")" "121 10 80"
+send f POST "$CF" "/v1/skills/my-courses/$SK/publish" '{}' > /dev/null
+check "publicado y enviado a revisión" "$(send f POST "$CF" "/v1/skills/my-courses/$SK/submit" '{}' | jq_ "d['data']['ficha']['estado']")" "PENDIENTE"
+check "pendiente: no aparece en el catálogo" "$(curl -s -b "$T/g" "$B/v1/skills/catalog" | jq_ "str(any(c['id']==$SK for c in d['data']))")" "False"
+check "la plataforma ve el curso pendiente con su contenido" "$(curl -s -b "$T/a" "$B/v1/admin/skills/courses?estado=PENDIENTE" | jq_ "str(any(c['id']==$SK for c in d['data']))") $(curl -s -b "$T/a" "$B/v1/admin/skills/courses/$SK" | jq_ "len(d['data']['preguntas'])")" "True 2"
+check "rechazar sin motivo -> PH-VAL-001" "$(send a POST "$CA" "/v1/admin/skills/courses/$SK/review" '{"decision":"RECHAZAR"}' | code)" "PH-VAL-001"
+check "la plataforma aprueba el curso" "$(send a POST "$CA" "/v1/admin/skills/courses/$SK/review" '{"decision":"APROBAR"}' | jq_ "d['data']['estado']")" "APROBADO"
+check "catálogo de la gerencia: + IVA; del empleado: IVA incluido" "$(curl -s -b "$T/g" "$B/v1/skills/catalog" | jq_ "[c for c in d['data'] if c['id']==$SK][0]['importes']['EMPRESA']['total']") $(curl -s -b "$T/e2" "$B/v1/skills/catalog" | jq_ "[c for c in d['data'] if c['id']==$SK][0]['importes']['PERSONA']['total']")" "121 12.1"
+check "editar el contenido de un curso aprobado lo devuelve a revisión" "$(send f PATCH "$CF" "/v1/skills/my-courses/$SK" '{"resumen":"Cómo repartir el peso y sujetar bien la carga antes de salir"}' > /dev/null; curl -s -b "$T/f" "$B/v1/skills/my-courses" | jq_ "[c for c in d['data'] if c['id']==$SK][0]['estado']")" "PENDIENTE"
+send a POST "$CA" "/v1/admin/skills/courses/$SK/review" '{"decision":"APROBAR"}' > /dev/null
+check "comprar sin aceptar las condiciones -> PH-VAL-001" "$(send g POST "$CG" /v1/skills/purchases "{\"modulo_id\":$SK,\"acepta_condiciones\":false}" | code)" "PH-VAL-001"
+check "persona: sin renunciar al desistimiento -> PH-VAL-001" "$(send e2 POST "$CE2" /v1/skills/purchases "{\"modulo_id\":$SK,\"acepta_condiciones\":true}" | jq_ "d['error']['code']+' '+str('renuncia_desistimiento' in d['error']['details'])")" "PH-VAL-001 True"
+check "RR. HH. no compra -> PH-PERM-001" "$(send h POST "$CH" /v1/skills/purchases "{\"modulo_id\":$SK,\"acepta_condiciones\":true}" | code)" "PH-PERM-001"
+if [ -n "${SMOKE_STRIPE_WHSEC:-}" ] && [ -n "${SMOKE_STRIPE_MOCK:-}" ]; then
+  check "formador sin cuenta conectada: no se puede comprar -> PH-SKL-002" "$(send g POST "$CG" /v1/skills/purchases "{\"modulo_id\":$SK,\"acepta_condiciones\":true}" | code)" "PH-SKL-002"
+  check "alta del formador en Stripe Connect (enlace)" "$(send f POST "$CF" /v1/skills/connect '{}' | jq_ "str(d['data']['url'].startswith('https://'))") $(curl -s -b "$T/f" "$B/v1/skills/connect" | jq_ "str(d['data']['cuenta'])+'/'+str(d['data']['lista'])")" "True True/False"
+  curl -s -X POST "$SMOKE_STRIPE_MOCK/__mock/accounts/complete" > /dev/null
+  check "cuenta conectada lista tras el alta" "$(curl -s -b "$T/f" "$B/v1/skills/connect" | jq_ "str(d['data']['lista'])")" "True"
+  send g POST "$CG" /v1/skills/purchases "{\"modulo_id\":$SK,\"acepta_condiciones\":true}" > "$T/cp.json"
+  check "compra de empresa: Checkout con el importe con IVA" "$(jq_ "str(d['data']['url'].startswith('https://'))+' '+str(d['data']['importe']['total'])" < "$T/cp.json")" "True 121"
+  curl -s "$SMOKE_STRIPE_MOCK/__mock/state" > "$T/ms2.json"
+  check "cargo con destino: el formador recibe el 80 % de la base" "$(jq_ "' '.join(str(x) for x in (d['sesiones'][-1]['params']['mode'], d['sesiones'][-1]['params']['payment_intent_data']['application_fee_amount'], d['sesiones'][-1]['params']['payment_intent_data']['transfer_data']['destination'][:5], d['tasas'][d['sesiones'][-1]['params']['line_items'][0]['tax_rates'][0]]['inclusive']))" < "$T/ms2.json")" "payment 4100 acct_ False"
+  CPID=$(jq_ "d['data']['compra_id']" < "$T/cp.json"); CSID=$(jq_ "d['sesiones'][-1]['id']" < "$T/ms2.json")
+  EV5="{\"id\":\"evt_sk_$R\",\"type\":\"checkout.session.completed\",\"livemode\":false,\"data\":{\"object\":{\"id\":\"$CSID\",\"mode\":\"payment\",\"payment_status\":\"paid\",\"payment_intent\":\"pi_$R\",\"metadata\":{\"compra_skills_id\":\"$CPID\"}}}}"
+  check "webhook: compra pagada" "$(webhook "$EV5" | jq_ "d['data']['resultado']")" "ok"
+  check "la empresa ya puede asignar el curso comprado" "$(curl -s -b "$T/g" "$B/v1/training/modules" | jq_ "str(any(m['id']==$SK and m['skills'] and not m['propio'] for m in d['data']))") $(curl -s -b "$T/g" "$B/v1/skills/catalog" | jq_ "str([c for c in d['data'] if c['id']==$SK][0]['licencia_empresa'])")" "True True"
+  check "con licencia de empresa, otra compra -> PH-SKL-003" "$(send g POST "$CG" /v1/skills/purchases "{\"modulo_id\":$SK,\"acepta_condiciones\":true}" | code) $(send e2 POST "$CE2" /v1/skills/purchases "{\"modulo_id\":$SK,\"acepta_condiciones\":true,\"renuncia_desistimiento\":true}" | code)" "PH-SKL-003 PH-SKL-003"
+  check "ventas del formador: 80 € para él, 20 € de comisión" "$(curl -s -b "$T/f" "$B/v1/skills/sales" | jq_ "' '.join(str(d['meta']['totales'][k]) for k in ('ventas','importe_formador','comision'))")" "1 80 20"
+  check "la otra empresa no ve el curso comprado" "$(curl -s -b "$T/t" "$B/v1/training/modules" | jq_ "str(any(m['id']==$SK for m in d['data']))")" "False"
+  check "la plataforma ve ventas y formadores" "$(curl -s -b "$T/a" "$B/v1/admin/skills/sales" | jq_ "str(d['meta']['totales']['ventas'] >= 1)") $(curl -s -b "$T/a" "$B/v1/admin/trainers" | jq_ "str(any(f['ventas']==1 and f['stripe']['lista'] for f in d['data']))")" "True True"
+else
+  check "compra sin pasarela o sin cuenta del formador: controlado" "$(send g POST "$CG" /v1/skills/purchases "{\"modulo_id\":$SK,\"acepta_condiciones\":true}" | jq_ "'controlado' if d.get('error',{}).get('code') in ('PH-PAY-001','PH-SKL-002') else json.dumps(d)[:120]")" "controlado"
+fi
+
 echo "== Demo comercial y QR del folleto (REQ_QR_DEMO_COMERCIAL)"
 RD=$(curl -s -o /dev/null -D - "$WEB/demo")
 check "/demo -> 302 a la landing en modo demo (DMO-001)" "$(printf '%s' "$RD" | head -1 | awk '{print $2}') $(printf '%s' "$RD" | grep -ic '^location:.*modo=demo')" "302 1"
@@ -398,6 +453,9 @@ if [ -n "$DP" ]; then
   check "demo: alta con email -> PH-DEMO-001" "$(curl -s -b "$T/d1" -H "$J" -H "X-CSRF-Token: $CD" "$B/v1/employees" -d '{"nombre":"Leo","email":"leo@ejemplo.es","puesto":"OTRO","tipo_contrato":"ETT","turno":"TARDE","fecha_alta":"2024-01-15"}' | code)" "PH-DEMO-001"
   check "demo: exportar la empresa -> PH-DEMO-001" "$(curl -s -b "$T/d1" "$B/v1/company/export" | code)" "PH-DEMO-001"
   check "demo: contratar -> PH-DEMO-001" "$(curl -s -b "$T/d1" -H "$J" -H "X-CSRF-Token: $CD" "$B/v1/billing/checkout" -d '{"plan":"COMPLETO","ciclo":"MENSUAL","acepta_terminos":true}' | code)" "PH-DEMO-001"
+  check "demo: comprar en Skills -> PH-DEMO-001" "$(curl -s -b "$T/d1" -H "$J" -H "X-CSRF-Token: $CD" "$B/v1/skills/purchases" -d '{"modulo_id":1,"acepta_condiciones":true}' | code)" "PH-DEMO-001"
+  check "demo: catálogo de Skills con la licencia de Castilla" "$(curl -s -b "$T/d1" "$B/v1/skills/catalog" | jq_ "str(len(d['data']) >= 2 and any(c['licencia_empresa'] for c in d['data']))")" "True"
+  check "demo: formador@ ve sus tres cursos y sus ventas" "$(curl -s -c "$T/df" -H "$J" -H "$P" "$B/v1/auth/login" -d "{\"email\":\"formador@pymehub.demo\",\"password\":\"$DP\"}" > /dev/null; curl -s -b "$T/df" "$B/v1/skills/my-courses" | jq_ "d['meta']['total']") $(curl -s -b "$T/df" "$B/v1/skills/sales" | jq_ "d['meta']['totales']['ventas']")" "3 2"
   check "demo: ve su vigencia y su historial de pagos" "$(curl -s -b "$T/d1" "$B/v1/billing/invoices" | jq_ "str(d['meta']['total'] >= 3)")" "True"
   check "demo: sí ve el riesgo de su empresa" "$(curl -s -b "$T/d1" "$B/v1/risk?level=ALTO" | jq_ "5 <= d['meta']['total'] <= 8")" "True"
   for i in 1 2 3 4 5; do curl -s -H "$J" -H "$P" "$B/v1/auth/login" -d '{"email":"gerente@pymehub.demo","password":"mala-contrasena"}' > /dev/null; done

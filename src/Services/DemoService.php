@@ -28,6 +28,7 @@ final class DemoService
     public const DOMINIO = 'pymehub.demo';
     public const NIF_CASTILLA = 'B45000001';
     public const NIF_TAJO = 'B45000002';
+    public const NIF_FORMADOR = 'B45000003';
 
     private const NOMBRES = ['Lucía', 'Javier', 'Marta', 'Daniel', 'Sara', 'Pablo', 'Elena', 'Álvaro', 'Carmen', 'Hugo',
         'Laura', 'Diego', 'Paula', 'Adrián', 'Irene', 'Sergio', 'Nuria', 'Raúl', 'Cristina', 'Iván', 'Andrea', 'Rubén',
@@ -82,7 +83,7 @@ final class DemoService
     /** ¿Existen ya las empresas de demostración? */
     public static function existe(): bool
     {
-        return Db::value('SELECT 1 FROM interlocutor WHERE es_demo = 1 OR nif IN (?, ?) LIMIT 1', [self::NIF_CASTILLA, self::NIF_TAJO]) !== null;
+        return Db::value('SELECT 1 FROM interlocutor WHERE es_demo = 1 OR nif IN (?, ?, ?) LIMIT 1', [self::NIF_CASTILLA, self::NIF_TAJO, self::NIF_FORMADOR]) !== null;
     }
 
     /**
@@ -94,8 +95,8 @@ final class DemoService
         // Solo lo marcado como demo (DMO-020, DMO-022). El administrador de la plataforma no es demo
         // y se conserva (DMO-028).
         $ids = array_map('intval', array_column(Db::all(
-            "SELECT id FROM interlocutor WHERE tipo = 'EMPRESA' AND (es_demo = 1 OR nif IN (?, ?))",
-            [self::NIF_CASTILLA, self::NIF_TAJO]
+            "SELECT id FROM interlocutor WHERE tipo IN ('EMPRESA', 'FORMADOR') AND (es_demo = 1 OR nif IN (?, ?, ?))",
+            [self::NIF_CASTILLA, self::NIF_TAJO, self::NIF_FORMADOR]
         ), 'id'));
         $usuarios = array_map('intval', array_column(Db::all(
             "SELECT id FROM usuario WHERE perfil <> 'ADMIN' AND (es_demo = 1"
@@ -120,7 +121,7 @@ final class DemoService
             // --- Reparto Rápido Castilla S.L. (plan Completo) ---
             $castilla = $this->empresa('Reparto Rápido Castilla S.L.', 'Reparto Rápido', self::NIF_CASTILLA, 'COMPLETO', 'MENSUAL', 60, 'VIGENTE', Tiempo::dia(20));
             $this->pagosDemo($castilla, 'COMPLETO', 48);
-            $this->acceso($castilla, 'GERENTE', 'Ana', 'García Morales', 'gerente@' . self::DOMINIO);
+            $gerenteC = $this->acceso($castilla, 'GERENTE', 'Ana', 'García Morales', 'gerente@' . self::DOMINIO);
             $rrhh = $this->acceso($castilla, 'RRHH', 'Lucía', 'Prieto Sanz', 'rrhh@' . self::DOMINIO);
             $equiposC = [
                 'Zona Norte' => ['zona' => 'Madrid norte y Alcobendas', 'n' => 13, 'puestos' => ['CONDUCTOR', 'REPARTIDOR'], 'turnos' => ['MANANA', 'TARDE']],
@@ -157,6 +158,9 @@ final class DemoService
 
             // --- Fase 6 · Asesor: preferencias (demanda formativa) e historial de consultas sin contenido ---
             $resumen['preferencias'] = $this->asesor($castilla, $plantillaC, $conductor) + $this->asesor($tajo, $plantillaT, null);
+
+            // --- Fase 9d · Pyme Hub Skills: un formador, tres cursos y dos compras ficticias ---
+            $resumen['skills'] = $this->skills($castilla, $gerenteC, $conductor, $hoy);
 
             // --- Fase 7 · Bajas de los últimos 12 meses (rotación, línea base y retrospectiva) ---
             $resumen['bajas'] = $this->bajas($castilla, $plantillaC['equipos'], $hoy, 6, 9, $rrhh)
@@ -209,6 +213,82 @@ final class DemoService
             [$id, $plan, $ciclo, \PymeHub\Core\Parametros::precioMes($plan), $limite, Tiempo::dia(-120), $vigencia, $periodoFin]
         );
         return $id;
+    }
+
+    /**
+     * Pyme Hub Skills (fase 9d): formador@pymehub.demo con tres cursos (dos aprobados y uno en
+     * revisión), la licencia de Castilla para el primero y la compra personal del conductor del
+     * segundo, con su inscripción. Todo ficticio; el formador no tiene cuenta de Stripe.
+     */
+    private function skills(int $castilla, int $gerente, int $conductor, string $hoy): int
+    {
+        $f = Db::insert(
+            "INSERT INTO interlocutor (tipo, nombre, nombre_comercial, nif, sector, email_contacto, estado, es_demo)
+             VALUES ('FORMADOR', 'Formación Vial Meseta S.L.', 'Formación Vial Meseta', ?, 'Formación', ?, 'ACTIVO', 1)",
+            [self::NIF_FORMADOR, 'formador@' . self::DOMINIO]
+        );
+        Db::insert(
+            "INSERT INTO usuario (interlocutor_id, tipo_interlocutor, perfil, nombre, apellidos, email, password_hash, estado_acceso, privacidad_aceptada_en, es_demo)
+             VALUES (?, 'FORMADOR', 'FORMADOR', 'Marta', 'Ibáñez Lorenzo', ?, ?, 'ACTIVO', UTC_TIMESTAMP(), 1)",
+            [$f, 'formador@' . self::DOMINIO, $this->hash]
+        );
+        $cursos = [
+            ['SKL_EFICIENTE', 'Conducción eficiente en reparto urbano', 'Ahorra combustible y llega con menos estrés: anticipación, marchas y paradas en ciudad.',
+                'CONDUCCION', 'INTERMEDIO', 12, ['CONDUCTOR', 'REPARTIDOR'], 149.00, 19.90, 'APROBADO',
+                ['Anticipar el tráfico para frenar menos.', 'Elegir la marcha adecuada en ciudad.', 'Planificar las paradas de la ruta.'],
+                [['tipo' => 'texto', 'titulo' => 'Mirar lejos', 'texto' => 'Mirar dos o tres vehículos por delante permite levantar el pie antes y frenar menos. En reparto urbano, cada frenazo evitado es combustible y desgaste de frenos que no se pierde.'],
+                 ['tipo' => 'lista', 'titulo' => 'En cada parada', 'items' => ['Apaga el motor si vas a tardar más de un minuto.', 'Aparca en el sentido de la siguiente parada.', 'Agrupa entregas cercanas a pie.']],
+                 ['tipo' => 'consejo', 'texto' => 'Una velocidad constante consume menos que acelerar y frenar continuamente, aunque la media sea la misma.']],
+                [['enunciado' => '¿Qué ahorra más combustible en ciudad?', 'opciones' => ['Acelerar fuerte y frenar tarde', 'Anticipar y mantener una velocidad constante', 'Ir siempre en primera'], 'correcta' => 1],
+                 ['enunciado' => '¿Cuándo conviene apagar el motor en una parada?', 'opciones' => ['Nunca', 'Si vas a tardar más de un minuto', 'Solo de noche'], 'correcta' => 1]]],
+            ['SKL_AUXILIOS', 'Primeros auxilios en la ruta', 'Qué hacer en los primeros minutos ante un accidente o un malestar: proteger, avisar y socorrer.',
+                'BIENESTAR', 'BASICO', 10, ['CONDUCTOR', 'REPARTIDOR', 'MOZO_ALMACEN'], 99.00, 14.90, 'APROBADO',
+                ['Aplicar la secuencia proteger, avisar y socorrer.', 'Saber qué datos dar al 112.'],
+                [['tipo' => 'texto', 'titulo' => 'Proteger, avisar, socorrer', 'texto' => 'Lo primero es tu seguridad: señaliza, ponte el chaleco y aparta el vehículo si puedes. Después llama al 112 y, solo entonces, atiende a la persona.'],
+                 ['tipo' => 'lista', 'titulo' => 'Al llamar al 112', 'items' => ['Dónde estás: calle, punto kilométrico o referencia.', 'Qué ha pasado y cuántas personas hay.', 'Si respiran y están conscientes.']],
+                 ['tipo' => 'consejo', 'texto' => 'No muevas a una persona herida salvo que haya un peligro inmediato, como fuego.']],
+                [['enunciado' => '¿Qué haces primero ante un accidente?', 'opciones' => ['Socorrer', 'Proteger la zona y protegerte', 'Hacer fotos'], 'correcta' => 1],
+                 ['enunciado' => '¿Qué número llamas en España ante una emergencia?', 'opciones' => ['091', '112', '061 siempre'], 'correcta' => 1]]],
+            ['SKL_ESTRES', 'Gestión del estrés al volante', 'Técnicas breves para mantener la calma en atascos, retrasos y entregas difíciles.',
+                'BIENESTAR', 'BASICO', 8, ['CONDUCTOR', 'REPARTIDOR'], 79.00, 9.90, 'PENDIENTE',
+                ['Reconocer las señales del estrés.', 'Aplicar una respiración de 1 minuto.'],
+                [['tipo' => 'texto', 'titulo' => 'Señales de alerta', 'texto' => 'Apretar el volante, la mandíbula tensa o la prisa por adelantar son señales de que el estrés está al mando.'],
+                 ['tipo' => 'consejo', 'texto' => 'En un semáforo, inspira en 4 tiempos, mantén 4 y suelta en 6. Repite tres veces.']],
+                [['enunciado' => '¿Cuál es una señal de estrés al volante?', 'opciones' => ['Apretar el volante', 'Escuchar la radio', 'Respetar la distancia'], 'correcta' => 0],
+                 ['enunciado' => 'En la respiración propuesta, ¿cuánto dura la espiración?', 'opciones' => ['2 tiempos', '6 tiempos', '10 tiempos'], 'correcta' => 1]]],
+        ];
+        $ids = [];
+        foreach ($cursos as [$codigo, $titulo, $resumen, $cat, $nivel, $min, $puestos, $pe, $pp, $estado, $obj, $bloques, $preg]) {
+            $id = Db::insert(
+                "INSERT INTO modulo_formativo (interlocutor_id, codigo, titulo, resumen, categoria, nivel, puestos_destino, etiquetas, duracion_min, contenido, estado)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PUBLICADO')",
+                [$f, $codigo, $titulo, $resumen, $cat, $nivel, json_encode($puestos), json_encode(['skills'], JSON_UNESCAPED_UNICODE), $min,
+                 json_encode(['objetivos' => $obj, 'bloques' => $bloques], JSON_UNESCAPED_UNICODE)]
+            );
+            CatalogoService::guardarPreguntas($id, $preg);
+            Db::run(
+                "INSERT INTO curso_skills (modulo_id, interlocutor_id, precio_empresa, precio_persona, estado, enviado_en, revisado_en)
+                 VALUES (?, ?, ?, ?, ?, UTC_TIMESTAMP() - INTERVAL 40 DAY, ?)",
+                [$id, $f, $pe, $pp, $estado, $estado === 'APROBADO' ? gmdate('Y-m-d H:i:s', time() - 38 * 86400) : null]
+            );
+            $ids[$codigo] = $id;
+        }
+        $compra = function (int $modulo, string $tipo, int $usuario, int $diasAtras) use ($castilla, $f): array {
+            $curso = Db::one('SELECT precio_empresa, precio_persona FROM curso_skills WHERE modulo_id = ?', [$modulo]);
+            $imp = SkillsService::importe($curso, $tipo);
+            $id = Db::insert(
+                "INSERT INTO compra_skills (modulo_id, formador_id, tipo, interlocutor_id, usuario_id, base, iva, total, comision_pct, comision,
+                                            importe_formador, estado, condiciones_version, renuncia_desistimiento, ficticia, creado_en, pagado_en)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PAGADA', ?, ?, 1, ?, ?)",
+                [$modulo, $f, $tipo, $castilla, $usuario, $imp['base'], $imp['iva'], $imp['total'], $imp['comision_pct'], $imp['comision'],
+                 $imp['importe_formador'], (string) \PymeHub\Core\Parametros::get('legal.version', ''), $tipo === 'PERSONA' ? 1 : 0,
+                 $f2 = gmdate('Y-m-d H:i:s', time() - $diasAtras * 86400), $f2]
+            );
+            return Db::one('SELECT * FROM compra_skills WHERE id = ?', [$id]);
+        };
+        $compra($ids['SKL_EFICIENTE'], 'EMPRESA', $gerente, 30);
+        SkillsService::alPagar($compra($ids['SKL_AUXILIOS'], 'PERSONA', $conductor, 9));
+        return count($ids);
     }
 
     /** Tres mensualidades ficticias para ver el historial de facturas en la demo (base + IVA). */

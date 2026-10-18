@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Pyme Hub API
-  version: 0.9.0
+  version: 0.10.0
   description: |
     Contrato entre pymehub_api y pymehub_web (DEC-13).
     Autenticación por cookie de sesión HttpOnly. Toda petición que modifica datos
@@ -12,6 +12,8 @@ info:
     Vigencia (fase 9b): PH-PLAN-002 (403) suscripción vencida tras la gracia, solo lectura (salvo /v1/billing/* y logout).
     Pagos (fase 9c, Stripe solo en modo prueba): PH-PAY-001 (503) pago online no disponible; PH-PAY-002 (502) error de la
     pasarela; PH-PAY-003 (409) ya hay pago online; PH-PAY-004 (409) sin cliente de Stripe; PH-PAY-005 (400) firma de webhook no válida.
+    Pyme Hub Skills (fase 9d): PH-SKL-002 (409) el formador aún no cobra online; PH-SKL-003 (409) curso ya disponible
+    (licencia de la empresa o compra propia). Perfil FORMADOR (interlocutor tipo FORMADOR).
     Listados paginados: ?page=&per_page= (máx. 100); meta = { total, page, per_page }.
 servers:
   - url: https://api.pymehub.hermantorres.com
@@ -1572,7 +1574,7 @@ paths:
   /v1/stripe/webhook:
     post:
       summary: Webhook de Stripe (fase 9c)
-      description: 'Sin sesión ni CSRF; exige la cabecera Stripe-Signature (HMAC-SHA256 con stripe.webhook_secret, tolerancia 5 min). Idempotente por id de evento (evento_stripe). Eventos: checkout.session.completed (enlaza cliente y suscripción, aplica plan y ciclo), invoice.paid (pago PAGADO, vigencia VIGENTE hasta el fin del periodo, PILOTO → ACTIVO), invoice.payment_failed (pago FALLIDO), customer.subscription.created/updated (cantidad, cancelación, prueba), customer.subscription.deleted (deja de renovarse; la vigencia sigue hasta periodo_fin). Eventos livemode se ignoran. Si el proceso falla responde 5xx y Stripe reintenta.'
+      description: 'Fase 9d: también checkout.session.completed/expired de compras de Skills (metadata.compra_skills_id) y account.updated de cuentas conectadas. Sin sesión ni CSRF; exige la cabecera Stripe-Signature (HMAC-SHA256 con stripe.webhook_secret, tolerancia 5 min). Idempotente por id de evento (evento_stripe). Eventos: checkout.session.completed (enlaza cliente y suscripción, aplica plan y ciclo), invoice.paid (pago PAGADO, vigencia VIGENTE hasta el fin del periodo, PILOTO → ACTIVO), invoice.payment_failed (pago FALLIDO), customer.subscription.created/updated (cantidad, cancelación, prueba), customer.subscription.deleted (deja de renovarse; la vigencia sigue hasta periodo_fin). Eventos livemode se ignoran. Si el proceso falla responde 5xx y Stripe reintenta.'
       security: []
       responses:
         '200': { description: 'data = { recibido: true, resultado: ok|duplicado|ignorado|sin_empresa|ignorado_livemode }' }
@@ -1609,3 +1611,151 @@ paths:
         '200': { description: 'data = Vigencia' }
         '404': { description: PH-TENANT-001 }
         '422': { description: PH-VAL-001 }
+  /v1/skills/catalog:
+    get:
+      summary: Catálogo de Pyme Hub Skills (GERENTE, RRHH, EMPLEADO · fase 9d)
+      description: Cursos aprobados por la plataforma y publicados por su formador. La gerencia ve el precio de licencia sin IVA; la persona empleada, su precio con IVA incluido.
+      security: [{ sesion: [] }]
+      responses:
+        '200': { description: 'data[] = { id, titulo, resumen, categoria, nivel, duracion_min, puestos_destino, objetivos, bloques, formador: { id, nombre, cobra_online }, precio_empresa, precio_persona, importes: { EMPRESA: ImporteSkills, PERSONA: ImporteSkills }, licencia_empresa, comprado_por_mi }; meta = { total, comision_pct, iva_pct }. ImporteSkills = { tipo, base, iva_pct, iva, total, iva_incluido, comision_pct, comision, importe_formador, moneda }' }
+  /v1/skills/purchases:
+    get:
+      summary: Compras de Skills (GERENTE las de la empresa; EMPLEADO las suyas)
+      security: [{ sesion: [] }]
+      responses: { '200': { description: 'data[] = { id, modulo_id, titulo, formador, tipo, base, iva, total, estado, creado_en, pagado_en, ficticia }' } }
+    post:
+      summary: Comprar un curso (GERENTE licencia para la empresa; EMPLEADO para sí mismo)
+      description: 'Crea la compra pendiente y una sesión de Stripe Checkout de pago único con cargo con destino a la cuenta conectada del formador: application_fee_amount = comisión + IVA; el formador recibe la base menos la comisión. Empresa: precio sin IVA + tax rate exclusivo. Persona: precio con IVA incluido (tax rate inclusivo) y renuncia expresa al desistimiento (contenido digital). Al pagar (webhook checkout.session.completed) la licencia hace el curso visible para toda la empresa; la compra personal inscribe a la persona. No disponible en la demo.'
+      security: [{ sesion: [], csrf: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [modulo_id, acepta_condiciones]
+              additionalProperties: false
+              properties:
+                modulo_id: { type: integer }
+                acepta_condiciones: { type: boolean, const: true }
+                renuncia_desistimiento: { type: boolean, description: 'Obligatorio (true) para EMPLEADO' }
+      responses:
+        '201': { description: 'data = { url, compra_id, importe: ImporteSkills }' }
+        '403': { description: PH-PERM-001 · PH-DEMO-001 }
+        '409': { description: PH-SKL-002 · PH-SKL-003 }
+        '422': { description: PH-VAL-001 }
+        '503': { description: PH-PAY-001 }
+  /v1/skills/my-courses:
+    get:
+      summary: Cursos del formador (FORMADOR)
+      security: [{ sesion: [] }]
+      responses: { '200': { description: 'data[] = { id, titulo, resumen, categoria, nivel, duracion_min, modulo_estado, estado: SIN_PRECIO|BORRADOR|PENDIENTE|APROBADO|RECHAZADO|RETIRADO, motivo, precio_empresa, precio_persona, ventas, ingresos, actualizado_en }' } }
+    post:
+      summary: Crear un curso (FORMADOR) con el mismo cuerpo que POST /v1/training/modules
+      security: [{ sesion: [], csrf: [] }]
+      responses: { '201': { description: Módulo en borrador }, '422': { description: PH-VAL-001 } }
+  /v1/skills/my-courses/{id}:
+    get:
+      summary: Curso del formador con cuestionario y ficha comercial (FORMADOR)
+      security: [{ sesion: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses: { '200': { description: 'Módulo + preguntas + ficha: { precio_empresa, precio_persona, estado, motivo, enviado_en, revisado_en, importes }' }, '404': { description: PH-TENANT-001 } }
+    patch:
+      summary: Editar el curso (FORMADOR); si estaba aprobado, vuelve a revisión
+      security: [{ sesion: [], csrf: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses: { '200': { description: ok } }
+  /v1/skills/my-courses/{id}/publish:
+    post:
+      summary: Publicar el curso (FORMADOR; al menos un bloque y dos preguntas)
+      security: [{ sesion: [], csrf: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses: { '200': { description: ok }, '422': { description: PH-VAL-001 } }
+  /v1/skills/my-courses/{id}/listing:
+    put:
+      summary: Precios del curso (FORMADOR)
+      security: [{ sesion: [], csrf: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [precio_empresa, precio_persona]
+              properties:
+                precio_empresa: { type: number, minimum: 1, maximum: 5000, description: Licencia para una empresa, sin IVA }
+                precio_persona: { type: number, minimum: 1, maximum: 5000, description: Particular, IVA incluido }
+      responses: { '200': { description: 'Como GET my-courses/{id}' } }
+  /v1/skills/my-courses/{id}/submit:
+    post:
+      summary: Enviar el curso a revisión (FORMADOR)
+      description: Exige el módulo publicado y los dos precios.
+      security: [{ sesion: [], csrf: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses: { '200': { description: 'ficha.estado = PENDIENTE' }, '422': { description: 'PH-VAL-001 (details: modulo, precios)' } }
+  /v1/skills/sales:
+    get:
+      summary: Ventas del formador (FORMADOR), sin datos personales de quien compra
+      security: [{ sesion: [] }]
+      responses: { '200': { description: 'data[] = { id, titulo, tipo, cliente (empresa o «Particular»), base, iva, total, comision_pct, comision, importe_formador, estado, pagado_en, ficticia }; meta.totales = { ventas, total, comision, importe_formador }' } }
+  /v1/skills/connect:
+    get:
+      summary: Estado de la cuenta de cobro (Stripe Connect Express, modo prueba) del formador
+      security: [{ sesion: [] }]
+      responses: { '200': { description: 'data = { disponible, cuenta, lista, modo, pendiente[] }' } }
+    post:
+      summary: Enlace de alta en Stripe Connect (FORMADOR; no disponible en la demo)
+      security: [{ sesion: [], csrf: [] }]
+      responses: { '201': { description: 'data = { url }' }, '503': { description: PH-PAY-001 } }
+  /v1/admin/trainers:
+    get:
+      summary: Formadores con su cobro, cursos, ventas, comisión y lo liquidado (ADMIN)
+      security: [{ sesion: [] }]
+      responses: { '200': { description: ok } }
+    post:
+      summary: Alta de formador e invitación de su cuenta (ADMIN)
+      security: [{ sesion: [], csrf: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nombre, nif, formador]
+              properties:
+                nombre: { type: string }
+                nombre_comercial: { type: string }
+                nif: { type: string }
+                email_contacto: { type: string, format: email }
+                formador: { type: object, required: [nombre, email], properties: { nombre: { type: string }, apellidos: { type: string }, email: { type: string, format: email } } }
+      responses: { '201': { description: 'data = { id, invitacion: { enlace, caduca_en } }' }, '409': { description: NIF o email duplicado } }
+  /v1/admin/skills/courses:
+    get:
+      summary: Cursos enviados a la plataforma (ADMIN)
+      security: [{ sesion: [] }]
+      parameters: [{ name: estado, in: query, schema: { type: string, enum: [BORRADOR, PENDIENTE, APROBADO, RECHAZADO, RETIRADO] } }]
+      responses: { '200': { description: 'data[]; meta = { total, pendientes }' } }
+  /v1/admin/skills/courses/{id}:
+    get:
+      summary: Contenido completo del curso para revisarlo (ADMIN)
+      security: [{ sesion: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses: { '200': { description: ok } }
+  /v1/admin/skills/courses/{id}/review:
+    post:
+      summary: Aprobar, pedir cambios o retirar un curso (ADMIN)
+      security: [{ sesion: [], csrf: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [APROBAR, RECHAZAR, RETIRAR] }
+                motivo: { type: string, maxLength: 300, description: Obligatorio para rechazar }
+      responses: { '200': { description: ok }, '422': { description: PH-VAL-001 } }
+  /v1/admin/skills/sales:
+    get:
+      summary: Ventas del marketplace, comisiones y liquidaciones a formadores (ADMIN)
+      security: [{ sesion: [] }]
+      responses: { '200': { description: 'data[] como /v1/skills/sales con formador; meta = { total, totales, stripe }' } }

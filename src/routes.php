@@ -18,6 +18,7 @@ use PymeHub\Controllers\V1\PagoController as Pagos;
 use PymeHub\Controllers\V1\ParametrosController as Parametros;
 use PymeHub\Controllers\V1\PublicoController as Publico;
 use PymeHub\Controllers\V1\RiesgoController as Riesgo;
+use PymeHub\Controllers\V1\SkillsController as Skills;
 use PymeHub\Controllers\V1\UsuarioController as Usuarios;
 use PymeHub\Core\Router;
 use PymeHub\Middleware\Auth;
@@ -33,6 +34,9 @@ return static function (Router $r): void {
     $gerente = Auth::require('GERENTE');
     $gestion = Auth::require('GERENTE', 'RRHH');
     $empleado = Auth::require('EMPLEADO');
+    $formador = Auth::require('FORMADOR');
+    $empresaTodos = Auth::require('GERENTE', 'RRHH', 'EMPLEADO');
+    $comprador = Auth::require('GERENTE', 'EMPLEADO');
     $planBienestar = Auth::plan('bienestar');
     $planFormacion = Auth::plan('formacion');
     $planAsesor = Auth::plan('asesor_formacion');
@@ -72,12 +76,35 @@ return static function (Router $r): void {
     $r->add('GET',   '/v1/admin/errors', [Operacion::class, 'errors'], [$admin]);
     $r->add('GET',   '/v1/admin/params', [Parametros::class, 'index'], [$admin]);
     $r->add('PUT',   '/v1/admin/params', [Parametros::class, 'update'], [$admin, $csrf]);
+    // Pyme Hub Skills (fase 9d): formadores, revisión de cursos y ventas
+    $r->add('GET',   '/v1/admin/trainers', [Skills::class, 'trainers'], [$admin]);
+    $r->add('POST',  '/v1/admin/trainers', [Skills::class, 'storeTrainer'], [$admin, $csrf]);
+    $r->add('GET',   '/v1/admin/skills/courses', [Skills::class, 'adminCourses'], [$admin]);
+    $r->add('GET',   '/v1/admin/skills/courses/{id}', [Skills::class, 'adminCourse'], [$admin]);
+    $r->add('POST',  '/v1/admin/skills/courses/{id}/review', [Skills::class, 'review'], [$admin, $csrf]);
+    $r->add('GET',   '/v1/admin/skills/sales', [Skills::class, 'adminSales'], [$admin]);
     // Vigencia y pagos (fases 9b y 9c)
     $r->add('GET',   '/v1/admin/payments', [Pagos::class, 'adminPayments'], [$admin]);
     $r->add('PUT',   '/v1/admin/tenants/{id}/validity', [Pagos::class, 'adminValidity'], [$admin, $csrf]);
 
     // Portabilidad y derechos RGPD (LEG-017, §8.8)
     $r->add('GET',  '/v1/company/export', [Operacion::class, 'exportCompany'], [$gerente, $noDemo]);
+
+    // Pyme Hub Skills (fase 9d): catálogo y compras de empresas y personas
+    $r->add('GET',  '/v1/skills/catalog', [Skills::class, 'catalog'], [$empresaTodos, $planFormacion]);
+    $r->add('GET',  '/v1/skills/purchases', [Skills::class, 'purchases'], [$comprador, $planFormacion]);
+    $r->add('POST', '/v1/skills/purchases', [Skills::class, 'purchase'], [$comprador, $planFormacion, $noDemo, $csrf]);
+    // Panel del formador (perfil FORMADOR): sus cursos reutilizan el editor de módulos
+    $r->add('GET',   '/v1/skills/my-courses', [Skills::class, 'myCourses'], [$formador]);
+    $r->add('POST',  '/v1/skills/my-courses', [Formacion::class, 'storeModule'], [$formador, $csrf]);
+    $r->add('GET',   '/v1/skills/my-courses/{id}', [Skills::class, 'myCourse'], [$formador]);
+    $r->add('PATCH', '/v1/skills/my-courses/{id}', [Skills::class, 'updateCourse'], [$formador, $csrf]);
+    $r->add('POST',  '/v1/skills/my-courses/{id}/publish', [Formacion::class, 'publish'], [$formador, $csrf]);
+    $r->add('PUT',   '/v1/skills/my-courses/{id}/listing', [Skills::class, 'listing'], [$formador, $csrf]);
+    $r->add('POST',  '/v1/skills/my-courses/{id}/submit', [Skills::class, 'submit'], [$formador, $csrf]);
+    $r->add('GET',   '/v1/skills/sales', [Skills::class, 'sales'], [$formador]);
+    $r->add('GET',   '/v1/skills/connect', [Skills::class, 'connectStatus'], [$formador]);
+    $r->add('POST',  '/v1/skills/connect', [Skills::class, 'connect'], [$formador, $noDemo, $csrf]);
 
     // Suscripción y pagos de la empresa (fases 9b y 9c): disponibles también con la suscripción vencida
     $r->add('GET',  '/v1/billing/subscription', [Pagos::class, 'subscription'], [$gerente]);

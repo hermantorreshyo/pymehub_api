@@ -624,8 +624,8 @@ Si una migración falla, restaura la copia del primer comando y vuelve a la etiq
 - [ ] `config.js` de la web creado.
 - [ ] Instalador completado, `/install` 404, `config.php` 640 y copia fuera del servidor.
 - [ ] `/etc/cron.d/pymehub` con copias, retención, alertas, riesgo diario (03:00), vigencia de suscripciones (00:15), borrado de empresas de baja (04:30) y sesgos trimestrales; primera copia hecha; `bash $API/cli/restore_test.sh` correcto (pide la contraseña de root de MariaDB) (informe en `storage/logs/restauracion-*.md`).
-- [ ] `/v1/health` en `ok` con versión 0.9.0 y `copia_seguridad: ok`.
-- [ ] Prueba de humo 230/230 y datos de demo regenerados (y `ai_warmup` si hay clave).
+- [ ] `/v1/health` en `ok` con versión 0.10.0 y `copia_seguridad: ok`.
+- [ ] Prueba de humo 251/251 y datos de demo regenerados (y `ai_warmup` si hay clave).
 - [ ] `curl -sI https://pymehub.hermantorres.com/demo` da 302 con `modo=demo`, y el QR impreso abre el panel «Pruebe Pyme Hub» en dos móviles.
 - [ ] Recorrido en navegador sin errores de consola; notas A externas.
 - [ ] Monitor externo activo.

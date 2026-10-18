@@ -2,7 +2,7 @@
 
 **Proyecto:** Pyme Hub — TFM EUDE Business School (The Best Team)
 **Documento:** Especificación de requerimientos técnicos del Producto Mínimo Viable (MVP)
-**Versión:** 0.9.8 · 17/10/2026
+**Versión:** 0.9.9 · 18/10/2026
 **Stack:** LAMP nativo, sin Docker (Linux · Apache · **MariaDB 11.8 LTS o MySQL 8.4 LTS** · PHP 8.4). Producción: MariaDB 11.8
 **Repositorios:** dos, independientes: `pymehub_api` (backend tipo API) y `pymehub_web` (frontend que consume la API)
 **Estado:** Alineado con la versión 4 del documento del TFM (carpeta *Revisión 004*). Los cambios que este documento obliga a trasladar al TFM se listan en §22.3.
@@ -28,6 +28,7 @@
 | 0.9.6 | 17/10/2026 | QR de instalación de la app: ruta estable `/app` → página `#/instalar` (§13.7, §18.1) |
 | 0.9.7 | 17/10/2026 | Fases 9 y 9a (v0.8.0): implementación de `RF-110`, `RF-111`, `RNF-062`, `RNF-063`, `RNF-064` y `LEG-007`/`LEG-017` (§17.5); nuevos `LEG-018` a `LEG-022` (textos legales, titular parametrizado, IVA y precios, contrato de encargo, versión aceptada) y `RF-112`/`RF-113` (parámetros de la plataforma, derecho de acceso del propio usuario) en §15 y §17.4 |
 | 0.9.8 | 17/10/2026 | Fases 9b y 9c (v0.9.0): vigencia de la suscripción (`RF-114` a `RF-116`) y pagos con Stripe en modo prueba (`RF-117` a `RF-120`); `PH-PLAN-002` y `PH-PAY-001` a `PH-PAY-005` en §16; tarea `cli/subscription_status.php` en §17.2; implementación en §17.6 |
+| 0.9.9 | 18/10/2026 | Fase 9d (v0.10.0): marketplace Pyme Hub Skills en modo prueba (`RF-121` a `RF-128`), `PH-SKL-002` y `PH-SKL-003` en §16, implementación y alcance diferido en §17.7 |
 
 ---
 
@@ -885,6 +886,8 @@ Coincidencia visual general con el mockup; funciona en escritorio, tableta y mó
 | `PH-PAY-003` | 409 | La empresa ya tiene el pago online activo |
 | `PH-PAY-004` | 409 | La empresa todavía no tiene cliente en la pasarela |
 | `PH-PAY-005` | 400 | Webhook con firma no válida |
+| `PH-SKL-002` | 409 | El formador del curso todavía no tiene la cuenta de cobro activa |
+| `PH-SKL-003` | 409 | El curso ya está disponible (licencia de la empresa o compra propia) |
 | `PH-TENANT-001` | 404 | Recurso inexistente o de otra empresa |
 | `PH-TENANT-002` | 409 | Límite de empleados del plan alcanzado |
 | `PH-TENANT-003` | 403 | Falta el contrato de encargado del tratamiento de la empresa |
@@ -958,6 +961,14 @@ Coincidencia visual general con el mockup; funciona en escritorio, tableta y mó
 | `RF-118` | M | **Webhooks firmados e idempotentes** (`Stripe-Signature`, tolerancia de 5 minutos, `evento_stripe`): el cobro amplía la vigencia hasta el fin del periodo pagado y activa la empresa; el impago queda registrado; la cancelación deja de renovar sin cortar el periodo pagado |
 | `RF-119` | S | **Cantidad facturada**: sincronización diaria de los empleados activos con la suscripción de Stripe, sin prorrateo (se cobra en la siguiente renovación) |
 | `RF-120` | M | **Facturas y pagos**: la gerencia ve sus pagos (base, IVA, total, periodo y factura de Stripe) y abre el portal del cliente; la plataforma ve todos los pagos y el total cobrado. Los pagos se incluyen en la exportación de la empresa (`RF-110`) |
+| `RF-121` | M | **Formadores**: interlocutores de tipo `FORMADOR` con cuentas de perfil `FORMADOR`, dados de alta por la plataforma con invitación. Panel propio: sus cursos, cobro y ventas. No acceden a datos de ninguna empresa |
+| `RF-122` | M | **Cursos de Skills**: el formador los escribe con el mismo editor y formato que los módulos (contenido, cuestionario y publicación), fija el precio de licencia para empresas (sin IVA) y el precio para particulares (IVA incluido) y los envía a revisión |
+| `RF-123` | M | **Revisión de la plataforma**: aprobar, pedir cambios con motivo o retirar de la venta. Solo se venden cursos aprobados; cambiar el contenido de un curso aprobado lo devuelve a revisión sin afectar a las compras hechas |
+| `RF-124` | M | **Compra de empresa** (gerencia): licencia para toda la plantilla, precio + IVA (`LEG-020`); el curso aparece entre los módulos de la empresa para asignarlo y para la autoinscripción |
+| `RF-125` | M | **Compra personal** (persona empleada): precio con IVA incluido, aceptación de las condiciones de Skills y renuncia expresa al desistimiento al empezar (art. 103.m TRLGDCU); la persona queda inscrita. La empresa ve la inscripción como una autoinscripción, nunca el pago |
+| `RF-126` | M | **Pago con Stripe Connect en modo prueba**: cargo con destino a la cuenta Express del formador; la plataforma retiene la comisión (`marketplace.comision_pct`, 20 %) sobre la base y el IVA; Stripe transfiere el resto al formador. Exención de IVA parametrizada (`marketplace.formacion_exenta_iva`, la confirma la gestoría) |
+| `RF-127` | M | **Ventas y liquidaciones**: el formador ve sus ventas sin datos personales de quien compra (empresa o «Particular»); la plataforma ve ventas, comisión y lo liquidado por formador |
+| `RF-128` | S | **Demo**: formador@pymehub.demo con tres cursos (dos a la venta y uno en revisión), la licencia de Castilla y una compra personal del conductor, todo ficticio; comprar está bloqueado (`PH-DEMO-001`) |
 | `RF-113` | M | **Derecho de acceso y portabilidad del propio usuario**: «Descargar mis datos» (`GET /v1/me/data-export`), con la nota del check-in descifrada; no disponible en la demo |
 
 ---
@@ -987,6 +998,23 @@ Coincidencia visual general con el mockup; funciona en escritorio, tableta y mó
 - **Portal del cliente**: se configura en el panel de Stripe con tarjeta, facturas y cancelación al final del periodo. Los cambios de plan los gestiona la plataforma.
 - **Pruebas**: `tests/stripe_mock.php` simula la API de Stripe para la prueba de humo en local (variables `SMOKE_STRIPE_WHSEC` y `SMOKE_STRIPE_MOCK`). La prueba real en el servidor se hace con las claves de prueba y la tarjeta 4242 4242 4242 4242.
 - **Configuración**: `cli/stripe_setup.php` escribe las claves en `config.php` sin mostrarlas en pantalla.
+
+### 17.7 Implementación de Pyme Hub Skills (v0.10.0) y alcance diferido
+
+- **Datos** (migración `0010_skills`):
+  - `curso_skills`: la ficha comercial y su revisión;
+  - `compra_skills`: compras de empresa o de persona, con base, IVA, total, comisión e importe del formador; FK compuesta `(usuario_id, interlocutor_id)`;
+  - `interlocutor.stripe_cuenta_id` y `stripe_cuenta_lista`.
+- **Visibilidad** (`ModuloRepository`): una empresa ve el catálogo global, sus módulos propios y los cursos de Skills con licencia pagada. Una persona ve, además, los que compró ella. `propio` significa «del interlocutor que consulta», de modo que el formador edita los suyos.
+- **Webhooks**: `checkout.session.completed` con `metadata.compra_skills_id` marca la compra como pagada e inscribe a la persona; `checkout.session.expired` la marca como fallida; `account.updated` activa la cuenta del formador. También se consulta a Stripe al abrir el panel.
+- **Pruebas**: el simulador `tests/stripe_mock.php` cubre las cuentas conectadas, los enlaces de alta y los pagos únicos con destino.
+- **Diferido** (fuera del MVP, documentado):
+  - valoraciones de los cursos;
+  - reembolsos y disputas: se gestionan en el panel de Stripe;
+  - vídeo externo;
+  - comunicación a Hacienda de las ventas de terceros (DAC7);
+  - facturación en nombre del formador: autofacturación o facturas del formador;
+  - cobros reales.
 
 ## 18. Datos de demostración
 

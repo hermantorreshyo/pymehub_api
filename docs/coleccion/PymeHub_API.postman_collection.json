@@ -3148,6 +3148,531 @@
           ]
         }
       ]
+    },
+    {
+      "name": "20 · Pyme Hub Skills (fase 9d, Stripe Connect en modo prueba)",
+      "item": [
+        {
+          "name": "Catálogo de Skills (GERENTE, RRHH, EMPLEADO)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/skills/catalog",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "skills",
+                "catalog"
+              ]
+            },
+            "description": "Precios por tipo de compra: empresa + IVA, persona IVA incluido."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Comprar licencia para la empresa (GERENTE)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/skills/purchases",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "skills",
+                "purchases"
+              ]
+            },
+            "description": "Devuelve la URL de Checkout.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"modulo_id\": \"{{modulo_id}}\",\n  \"acepta_condiciones\": true\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Comprar para mí (EMPLEADO)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/skills/purchases",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "skills",
+                "purchases"
+              ]
+            },
+            "description": "Renuncia expresa al desistimiento (contenido digital).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"modulo_id\": \"{{modulo_id}}\",\n  \"acepta_condiciones\": true,\n  \"renuncia_desistimiento\": true\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Mis compras",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/skills/purchases",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "skills",
+                "purchases"
+              ]
+            },
+            "description": "Gerencia: licencias de la empresa. Empleado: las suyas."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Mis cursos (FORMADOR)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/skills/my-courses",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "skills",
+                "my-courses"
+              ]
+            },
+            "description": "Con estado comercial, ventas e ingresos."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Precios de un curso (FORMADOR)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/skills/my-courses/{{modulo_id}}/listing",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "skills",
+                "my-courses",
+                "{{modulo_id}}",
+                "listing"
+              ]
+            },
+            "description": "Empresa sin IVA; particular con IVA incluido.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"precio_empresa\": 149,\n  \"precio_persona\": 19.9\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Enviar a revisión (FORMADOR)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/skills/my-courses/{{modulo_id}}/submit",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "skills",
+                "my-courses",
+                "{{modulo_id}}",
+                "submit"
+              ]
+            },
+            "description": "Exige el curso publicado y los precios.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Mis ventas (FORMADOR)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/skills/sales",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "skills",
+                "sales"
+              ]
+            },
+            "description": "Sin datos personales de quien compra."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Alta en Stripe Connect (FORMADOR)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/skills/connect",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "skills",
+                "connect"
+              ]
+            },
+            "description": "Enlace de alta Express en modo prueba.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Formadores (ADMIN)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/trainers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "trainers"
+              ]
+            },
+            "description": "Cobro, cursos, ventas, comisión y liquidado."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Nuevo formador (ADMIN)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/trainers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "trainers"
+              ]
+            },
+            "description": "Crea el formador e invita a su cuenta.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Formación Ejemplo S.L.\",\n  \"nif\": \"B12345678\",\n  \"formador\": {\n    \"nombre\": \"Marta\",\n    \"apellidos\": \"Ejemplo\",\n    \"email\": \"marta@ejemplo.es\"\n  }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cursos en revisión (ADMIN)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/skills/courses?estado=PENDIENTE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "skills",
+                "courses?estado=PENDIENTE"
+              ]
+            },
+            "description": "Lista para revisar."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Aprobar un curso (ADMIN)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/skills/courses/{{modulo_id}}/review",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "skills",
+                "courses",
+                "{{modulo_id}}",
+                "review"
+              ]
+            },
+            "description": "APROBAR, RECHAZAR (con motivo) o RETIRAR.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"APROBAR\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ventas y liquidaciones (ADMIN)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/skills/sales",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "skills",
+                "sales"
+              ]
+            },
+            "description": "Totales de comisión y de lo liquidado a formadores."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     }
   ],
   "variable": [

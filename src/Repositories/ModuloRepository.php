@@ -18,7 +18,19 @@ final class ModuloRepository
                               FROM modulo_formativo m
                               JOIN interlocutor i ON i.id = m.interlocutor_id
                              WHERE m.eliminado_en IS NULL
-                               AND (i.tipo = 'PLATAFORMA' OR m.interlocutor_id = ?)";
+                               AND (i.tipo = 'PLATAFORMA' OR m.interlocutor_id = ?
+                                    OR m.id IN (SELECT c.modulo_id FROM compra_skills c
+                                                 WHERE c.interlocutor_id = ? AND c.estado = 'PAGADA'
+                                                   AND (c.tipo = 'EMPRESA' OR c.usuario_id = ?)))";
+
+    /**
+     * Parámetros de visibilidad: catálogo global, módulos propios y cursos de Pyme Hub Skills
+     * comprados (fase 9d) por la empresa (licencia para toda la plantilla) o por la propia persona.
+     */
+    private static function vis(int $interlocutorId): array
+    {
+        return [$interlocutorId, $interlocutorId, \PymeHub\Core\Context::usuarioId()];
+    }
 
     /**
      * Módulos visibles para una empresa.
@@ -28,7 +40,7 @@ final class ModuloRepository
     public static function list(int $interlocutorId, array $f, bool $soloPublicados): array
     {
         $sql = self::SELECT;
-        $params = [$interlocutorId];
+        $params = self::vis($interlocutorId);
         if ($soloPublicados) {
             $sql .= " AND m.estado = 'PUBLICADO'";
         } elseif (!empty($f['estado'])) {
@@ -51,7 +63,7 @@ final class ModuloRepository
             array_push($params, $like, $like, $like);
         }
         $sql .= " ORDER BY FIELD(m.categoria, 'CONDUCCION', 'ALMACEN', 'CLIENTE', 'BIENESTAR', 'DESARROLLO'), m.titulo";
-        $rows = array_map([self::class, 'present'], Db::all($sql, $params));
+        $rows = array_map(static fn (array $r) => self::present($r, false, $interlocutorId), Db::all($sql, $params));
         if (!empty($f['puesto'])) {
             $rows = array_values(array_filter($rows, static fn (array $m) => in_array($f['puesto'], $m['puestos_destino'], true)));
         }
@@ -61,8 +73,8 @@ final class ModuloRepository
     /** Módulo visible para la empresa (global o propio), con su contenido. */
     public static function find(int $id, int $interlocutorId): ?array
     {
-        $row = Db::one(self::SELECT . ' AND m.id = ?', [$interlocutorId, $id]);
-        return $row === null ? null : self::present($row, true);
+        $row = Db::one(self::SELECT . ' AND m.id = ?', [...self::vis($interlocutorId), $id]);
+        return $row === null ? null : self::present($row, true, $interlocutorId);
     }
 
     public static function idPorCodigo(string $codigo): ?int
@@ -136,7 +148,8 @@ final class ModuloRepository
         Db::run('UPDATE modulo_formativo SET ' . implode(', ', $sets) . ' WHERE id = ? AND interlocutor_id = ?', $params);
     }
 
-    public static function present(array $r, bool $detalle = false): array
+    /** propio: el módulo es del interlocutor que consulta (empresa o formador); skills: curso de un formador. */
+    public static function present(array $r, bool $detalle = false, ?int $interlocutorId = null): array
     {
         $contenido = json_decode((string) $r['contenido'], true) ?: [];
         $m = [
@@ -151,7 +164,8 @@ final class ModuloRepository
             'duracion_min'    => (int) $r['duracion_min'],
             'estado'          => $r['estado'],
             'version'         => (int) $r['version'],
-            'propio'          => $r['propietario_tipo'] !== 'PLATAFORMA',
+            'propio'          => $interlocutorId !== null ? (int) $r['interlocutor_id'] === $interlocutorId : $r['propietario_tipo'] === 'EMPRESA',
+            'skills'          => $r['propietario_tipo'] === 'FORMADOR',
             'bloques'         => count($contenido['bloques'] ?? []),
         ];
         if ($detalle) {

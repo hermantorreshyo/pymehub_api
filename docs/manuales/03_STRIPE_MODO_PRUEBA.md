@@ -1,6 +1,6 @@
 # Manual 03 · Pagos con Stripe en modo prueba
 
-**Versión:** API 0.9.0 · 17/10/2026 · Requisitos `RF-114` a `RF-120`.
+**Versión:** API 0.10.0 · 18/10/2026 · Requisitos `RF-114` a `RF-120` (suscripciones) y `RF-121` a `RF-128` (Pyme Hub Skills).
 
 Pyme Hub cobra la suscripción con Stripe **solo en modo prueba**: no se mueve dinero real. Si en `config.php` hay una clave `sk_live_`, el pago online se desactiva solo (`PH-PAY-001`). Cobrar de verdad exige una sociedad constituida y una revisión fiscal y jurídica, y queda fuera del MVP.
 
@@ -114,10 +114,51 @@ sudo -u www-data php $API/cli/subscription_status.php    # "Vigencias actualizad
 
 ---
 
-## 5. Lo que queda fuera del MVP
+## 5. Pyme Hub Skills con Stripe Connect (v0.10.0)
+
+Los formadores cobran sus cursos con **Stripe Connect** (cuentas Express) en modo prueba. Cada venta es un **cargo con destino**:
+- quien compra paga a la plataforma;
+- Stripe transfiere al formador la base menos la comisión (20 % por defecto, en Parámetros);
+- Pyme Hub conserva la comisión y el IVA.
+
+### 5.1 Configuración (una vez, en modo prueba)
+
+1. **Connect:** en el panel, entra en **Connect** y completa el alta de la plataforma. En modo prueba es inmediato: elige que los vendedores usen cuentas **Express**.
+2. **Webhook:** en el mismo destino del apartado 2.3, añade los eventos `checkout.session.expired` y `account.updated`. Si Stripe pide un destino aparte para los eventos «de cuentas conectadas», crea otro con la misma URL y el evento `account.updated`, y guarda su secreto con `cli/stripe_setup.php`. Con un solo secreto no hay problema: el panel del formador también consulta el estado de su cuenta a Stripe al abrirse.
+
+### 5.2 Prueba de extremo a extremo
+
+1. **Alta del formador.** En Administración → Skills → **Formadores** → «Nuevo formador», da de alta uno con un email tuyo y abre el enlace de invitación.
+2. **Curso.** Como formador:
+   - «Nuevo curso»: escribe el contenido y dos preguntas, guarda y **Publicar**;
+   - fija los precios y pulsa **Enviar a revisión**.
+3. **Cobro del formador.** En «Mis cursos», pulsa **Activar el cobro**. Stripe abre el alta Express de prueba:
+   - teléfono `000 000 0000` y código SMS `000000`;
+   - datos personales de ejemplo, documento de prueba si lo pide;
+   - IBAN de prueba `ES0700120345030000067890`.
+
+   Al volver, el panel indica «Cuenta de cobro activa».
+4. **Revisión.** En Administración → Skills → Revisión de cursos, abre el curso con **Revisar** y pulsa **Aprobar**.
+5. **Compra de empresa.** Como gerente de una empresa de prueba: Skills → **Comprar licencia** → paga con la tarjeta 4242. Al volver, el curso figura como «Licencia de tu empresa» y aparece en Formación para asignarlo.
+6. **Compra personal.** Como una persona empleada de otra empresa: Skills → **Comprar para mí**. Acepta las condiciones y la renuncia al desistimiento y paga. El curso aparece en su formación.
+7. **Comprobación final:**
+   - el formador ve las ventas en **Ventas**;
+   - la plataforma, en Administración → Skills → **Ventas y liquidaciones**;
+   - en Stripe → Connect, la cuenta del formador muestra las transferencias.
+
+### 5.3 Demo
+
+`formador@pymehub.demo`, con la contraseña de la demo, muestra:
+- tres cursos: dos a la venta y uno en revisión;
+- dos ventas ficticias: la licencia de Castilla y la compra del conductor.
+
+Comprar y activar el cobro están bloqueados en la demo.
+
+## 6. Lo que queda fuera del MVP
 
 - Cobros reales (modo live).
 - Facturación con los datos fiscales del titular: hasta que la sociedad esté constituida, las facturas son las de prueba de Stripe.
 - Cambios de plan desde el portal.
 - Reembolsos y disputas, que se gestionan en el panel de Stripe.
 - Recordatorios por correo.
+- Skills: valoraciones, reembolsos y disputas desde la aplicación, vídeo externo, comunicación DAC7 y facturación en nombre del formador.
